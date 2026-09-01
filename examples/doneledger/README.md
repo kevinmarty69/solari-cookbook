@@ -44,7 +44,11 @@ npm start
 open http://127.0.0.1:3000/
 ```
 
-Create an account, then click **Try Sample Run** to create a synthetic 17/20 report through the real HTTP API. The committed `results/run.json` remains the evidence for the earlier seeded proof CLI. If any loaded artifact fails its schema, hash, counter, permission, or cleanup gates, the interface rejects the live claim and visibly falls back to its bundled fixture.
+Create an account, then click **Run Sample** to create a synthetic 17/20 report through the real HTTP API. The committed `results/run.json` remains the evidence for the earlier seeded proof CLI. If any loaded artifact fails its schema, hash, counter, permission, or cleanup gates, the interface rejects the live claim and visibly falls back to its bundled fixture.
+
+## Founder test kit
+
+[`FOUNDER_TEST_GUIDE.md`](FOUNDER_TEST_GUIDE.md) is the zero-credit manual acceptance path. The New Verification screen links four upload-ready CSV fixtures plus a downloadable [`doneledger-founder-test-pack.xlsx`](outputs/01a05d25-9174-7372-bf52-94f74ee90862/doneledger-founder-test-pack.xlsx) tracker. The workbook is documentation and a test ledger, not an import file: the product intentionally accepts CSV only. **Run Safe Fixture** validates the CSV through `POST /api/manifests/validate` and persists a synthetic report through `POST /api/demo-runs`; neither route creates a Solari resource or contacts Dolibarr. Live setup remains a separate, explicit path.
 
 ## Legacy seeded-proof gates
 

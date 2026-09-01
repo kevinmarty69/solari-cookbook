@@ -1,0 +1,2 @@
+job_id,supplier_id,invoice_number,issue_date,due_date,currency,net,tax
+FOUNDER-BAD-002,SUP-INVALID,INV-MISSING-GROSS,2026-09-01,2026-09-30,EUR,100.00,20.00

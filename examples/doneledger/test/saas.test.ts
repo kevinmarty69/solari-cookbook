@@ -44,6 +44,67 @@ test("CSV import handles quoted fields and rejects unsafe manifests", () => {
   assert.throws(() => parseInvoiceCsv(`${HEADER}\n${Array.from({ length: 26 }, (_, index) => ROW.replace("JOB-1", `JOB-${index}`)).join("\n")}`), /at most 25/)
 })
 
+test("authenticated manifest validation reuses the server CSV contract without starting live work", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "doneledger-manifest-test-"))
+  let liveCalls = 0
+  const server = createDoneLedgerServer({
+    dataDir,
+    liveAccessCode: "private-access-code",
+    allowedDolibarrOrigins: new Set(["https://erp.example.com"]),
+    liveRunner: async () => {
+      liveCalls += 1
+      throw new Error("must not run")
+    },
+  })
+  const origin = await listen(server)
+  try {
+    const csv = `${HEADER}\n${ROW}`
+    const anonymous = await fetch(`${origin}/api/manifests/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csv }),
+    })
+    assert.equal(anonymous.status, 401)
+
+    const cookie = await signup(origin, "manifest@example.com")
+    const valid = await fetch(`${origin}/api/manifests/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ csv }),
+    })
+    assert.equal(valid.status, 200)
+    assert.deepEqual(await valid.json(), {
+      headers: HEADER.split(","),
+      rowCount: 1,
+      preview: [["JOB-1", "SUP, 1", "INV-1", "2026-09-01", "2026-09-30", "EUR", "100.00", "20.00", "120.00"]],
+    })
+
+    const invalid = await fetch(`${origin}/api/manifests/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ csv: csv.replace("120.00", "121.00") }),
+    })
+    assert.equal(invalid.status, 400)
+    assert.match((await invalid.json() as { error: string }).error, /gross must equal/)
+
+    for (const [file, verified, claimed] of [["01-success-2-of-2.csv", 2, 2], ["02-exceptions-3-of-5.csv", 3, 5]] as const) {
+      const fixtureCsv = await readFile(new URL(`../public/test-kit/${file}`, import.meta.url), "utf8")
+      const demo = await fetch(`${origin}/api/demo-runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: JSON.stringify({ csv: fixtureCsv }),
+      })
+      assert.equal(demo.status, 201)
+      const run = (await demo.json() as { run: { mode: string; summary: { verified: number; claimed: number } } }).run
+      assert.deepEqual({ mode: run.mode, verified: run.summary.verified, claimed: run.summary.claimed }, { mode: "fixture", verified, claimed })
+    }
+    assert.equal(liveCalls, 0)
+  } finally {
+    await close(server)
+    await rm(dataDir, { recursive: true, force: true })
+  }
+})
+
 test("signup, login and logout use persistent hashed accounts and expiring sessions", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "doneledger-auth-test-"))
   let time = Date.parse("2026-09-01T12:00:00Z")
