@@ -6,6 +6,8 @@ DoneLedger is a small public proof of one idea: automated work should be billed 
 
 The included data is synthetic. This is a technical demonstration, not a production finance system or a customer result.
 
+![DoneLedger live verification proof](public/doneledger-live-proof.png)
+
 ## Run from a clean clone
 
 Node 20 or newer is required for the verifier. The interface itself has no framework or build step:
