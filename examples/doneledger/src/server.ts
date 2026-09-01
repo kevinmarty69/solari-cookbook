@@ -117,6 +117,12 @@ async function staticResponse(pathname: string, response: ServerResponse): Promi
     "/styles.css": ["../public/styles.css", "text/css; charset=utf-8"],
     "/doneledger-live-proof.png": ["../public/doneledger-live-proof.png", "image/png"],
     "/sample.csv": ["../public/sample.csv", "text/csv; charset=utf-8"],
+    "/test-kit/01-success-2-of-2.csv": ["../public/test-kit/01-success-2-of-2.csv", "text/csv; charset=utf-8"],
+    "/test-kit/02-exceptions-3-of-5.csv": ["../public/test-kit/02-exceptions-3-of-5.csv", "text/csv; charset=utf-8"],
+    "/test-kit/03-invalid-total.csv": ["../public/test-kit/03-invalid-total.csv", "text/csv; charset=utf-8"],
+    "/test-kit/04-missing-column.csv": ["../public/test-kit/04-missing-column.csv", "text/csv; charset=utf-8"],
+    "/test-kit/founder-test-guide.md": ["../FOUNDER_TEST_GUIDE.md", "text/markdown; charset=utf-8"],
+    "/test-kit/doneledger-founder-test-pack.xlsx": ["../outputs/01a05d25-9174-7372-bf52-94f74ee90862/doneledger-founder-test-pack.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
     "/results/run.json": ["../results/run.json", "application/json; charset=utf-8"],
   }
   const route = routes[pathname]
@@ -383,6 +389,32 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
       }
 
       const user = await requireUser(request)
+
+      if (method === "POST" && url.pathname === "/api/manifests/validate") {
+        rateLimit(request, "manifest", 60, 10 * 60_000)
+        const body = await readJson(request)
+        let manifest: ExpectedInvoice[]
+        try {
+          manifest = parseInvoiceCsv(csv(body.csv))
+        } catch (error) {
+          throw new HttpError(400, error instanceof Error ? error.message : "CSV is invalid")
+        }
+        return json(response, 200, {
+          headers: ["job_id", "supplier_id", "invoice_number", "issue_date", "due_date", "currency", "net", "tax", "gross"],
+          rowCount: manifest.length,
+          preview: manifest.slice(0, 5).map((invoice) => [
+            invoice.jobId,
+            invoice.supplierId,
+            invoice.invoiceNumber,
+            invoice.issueDate,
+            invoice.dueDate,
+            invoice.currency,
+            (invoice.netCents / 100).toFixed(2),
+            (invoice.taxCents / 100).toFixed(2),
+            (invoice.grossCents / 100).toFixed(2),
+          ]),
+        })
+      }
 
       if (method === "POST" && url.pathname === "/api/demo-runs") {
         rateLimit(request, "demo", 30, 10 * 60_000)
