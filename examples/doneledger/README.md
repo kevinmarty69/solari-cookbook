@@ -6,6 +6,26 @@ DoneLedger is a small public proof of one idea: automated work should be billed 
 
 The included data is synthetic. This is a technical demonstration, not a production finance system or a customer result.
 
+## Run the SaaS locally
+
+```bash
+cd examples/doneledger
+npm ci
+npm test
+npm start
+open http://127.0.0.1:3000/
+```
+
+The sample, CSV import, seven-day owner history, capability-link sharing, revocation and deletion work without credentials. Live verification is invitation-only and remains disabled unless the server has both `SOLARI_API_KEY` and `DONELEDGER_LIVE_ACCESS_CODE`. A live request uses one fresh Solari browser with the submitted read-only Dolibarr account, confirms invoice-create and payment-create routes are denied, reads the claimed invoice references, releases the browser, compares in one Solari sandbox, and saves only the condensed report. Credentials are not persisted.
+
+The SaaS answers a deliberately narrow question: do the invoice records in a submitted claim match a fresh Dolibarr snapshot? It does not prove who created those records, retain the complete ERP rows, or authorize accounting or payment actions. Input hashes in a report are fingerprints of the compared data, not independently recalculable proofs. Live jobs allow one process-wide run at a time, three attempts per hour per direct client address, no SDK retries, and a six-minute abort signal; reports expire after seven days.
+
+```bash
+SOLARI_API_KEY=slr_live_... \
+DONELEDGER_LIVE_ACCESS_CODE=choose-a-long-private-code \
+npm start
+```
+
 ![DoneLedger live verification proof](public/doneledger-live-proof.png)
 
 ## Run from a clean clone

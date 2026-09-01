@@ -1,5 +1,7 @@
 import { isDeepStrictEqual } from "node:util"
 import { randomUUID } from "node:crypto"
+import { isIP } from "node:net"
+import { lookup } from "node:dns/promises"
 
 import { Solari, type BrowserSession } from "@solarisdk/browser"
 import { SolariClient, type Sandbox } from "@solarisdk/sdk"
@@ -14,10 +16,10 @@ export interface ErpAdapter {
   readonly workerUrl: URL
   readonly verifierUrl: URL
   assertReady(): void
-  probeWorkerRestrictions(page: BrowserPage): Promise<Pick<PermissionEvidence, "workerCannotValidate" | "workerCannotPay">>
-  writeDrafts(page: BrowserPage, invoices: readonly ExpectedInvoice[]): Promise<void>
+  probeWorkerRestrictions(page: BrowserPage, draftHref: string): Promise<Pick<PermissionEvidence, "workerCannotValidate" | "workerCannotPay">>
+  writeDrafts(page: BrowserPage, invoices: readonly ExpectedInvoice[], runId: string): Promise<string>
   probeVerifierRestrictions(page: BrowserPage): Promise<Pick<PermissionEvidence, "verifierCannotMutate">>
-  readDrafts(page: BrowserPage): Promise<unknown>
+  readDrafts(page: BrowserPage, runId: string): Promise<unknown>
 }
 
 export interface PermissionEvidence {
@@ -27,6 +29,8 @@ export interface PermissionEvidence {
 }
 
 export interface LiveRunResult {
+  runId: string
+  manifest: readonly ExpectedInvoice[]
   summary: VerificationSummary
   observed: ObservedBatch
   permissions: PermissionEvidence
@@ -39,6 +43,21 @@ export interface LiveConfig {
   verifierProfileId: string
 }
 
+export interface DolibarrConnection {
+  baseUrl: string
+  username: string
+  password: string
+}
+
+export interface ReadOnlyLiveResult {
+  runId: string
+  manifest: readonly ExpectedInvoice[]
+  summary: VerificationSummary
+  observed: ObservedBatch
+  permissions: { verifierCannotMutate: true; verifierCannotPay: true }
+  lifecycle: { browsersReleased: true; sandboxKilled: true }
+}
+
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name]?.trim()
   if (!value) throw new Error(`${name} is required in live mode`)
@@ -46,14 +65,33 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
 }
 
 function httpUrl(env: NodeJS.ProcessEnv, name: string): URL {
-  const url = new URL(required(env, name))
+  return safeDolibarrUrl(required(env, name), name)
+}
+
+export function safeDolibarrUrl(value: string, name = "Dolibarr URL"): URL {
+  const url = new URL(value)
   if (url.protocol !== "https:") {
     throw new Error(`${name} must use HTTPS`)
   }
   if (url.username || url.password || url.search || url.hash) {
     throw new Error(`${name} must not contain credentials, query parameters, or fragments`)
   }
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  if (host === "localhost" || host.endsWith(".local") || (isIP(host) && privateAddress(host))) throw new Error(`${name} must use a public host`)
   return url
+}
+
+function privateAddress(address: string): boolean {
+  return /^(?:0|10|127|169\.254|192\.168)\./.test(address) ||
+    /^172\.(?:1[6-9]|2\d|3[01])\./.test(address) ||
+    /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(address) ||
+    /^(?:198\.(?:1[89])|203\.0\.113|192\.0\.2)\./.test(address) ||
+    address === "::1" || address === "::" || /^(?:fc|fd|fe[89ab])/i.test(address)
+}
+
+export async function assertPublicDolibarrDns(url: URL): Promise<void> {
+  const addresses = await lookup(url.hostname, { all: true })
+  if (!addresses.length || addresses.some(({ address }) => privateAddress(address))) throw new Error("Dolibarr DNS must resolve only to public addresses")
 }
 
 export function liveConfigFromEnv(env = process.env): LiveConfig {
@@ -127,7 +165,7 @@ export function dolibarrAdapterFromEnv(env = process.env): ErpAdapter {
       throw new Error(`Draft line ${invoice.jobId} was not created`)
     }
   }
-  const createDraft = async (page: BrowserPage, invoice: ExpectedInvoice, copy: number) => {
+  const createDraft = async (page: BrowserPage, invoice: ExpectedInvoice, copy: number, runId: string) => {
     await go(page, "/fourn/facture/card.php?action=create")
     if (await denied(page)) throw new Error("Worker cannot create supplier invoices")
 
@@ -142,10 +180,10 @@ export function dolibarrAdapterFromEnv(env = process.env): ErpAdapter {
     ])
     const invoiceNumber = invoice.jobId === "DL-019" && copy > 0 ? `${invoice.invoiceNumber}-DUP` : invoice.invoiceNumber
     await page.locator('input[name="ref_supplier"]').fill(invoiceNumber)
-    await page.locator('input[name="label"]').fill(invoice.jobId)
+    await page.locator('input[name="label"]').fill(`${invoice.jobId} · ${runId}`)
     await setDate(page, "re", invoice.issueDate)
     await setDate(page, "ech", invoice.dueDate)
-    await page.locator("#note_private").fill(`DoneLedger synthetic job ${invoice.jobId}`)
+    await page.locator("#note_private").fill(`DoneLedger run ${runId} job ${invoice.jobId}`)
     await submit(page, 'input[name="save"]')
     if (await denied(page) || !/[?&](?:id|facid)=\d+/.test(page.url())) throw new Error(`Draft header ${invoice.jobId} was not created`)
     await addDraftLine(page, invoice)
@@ -157,7 +195,8 @@ export function dolibarrAdapterFromEnv(env = process.env): ErpAdapter {
     assertReady() {
       if (workerUrl.origin !== verifierUrl.origin) throw new Error("Worker and verifier must use the same Dolibarr origin")
     },
-    async writeDrafts(page, invoices) {
+    async writeDrafts(page, invoices, runId) {
+      let probeHref = ""
       for (const invoice of invoices) {
         const wanted = invoice.jobId === "DL-020" ? 0 : invoice.jobId === "DL-019" ? 2 : 1
         const found = await existing(page, invoice.invoiceNumber)
@@ -165,13 +204,21 @@ export function dolibarrAdapterFromEnv(env = process.env): ErpAdapter {
         for (const href of found) {
           await go(page, href)
           await addDraftLine(page, invoice)
+          probeHref ||= href
         }
-        for (let copy = found.length; copy < wanted; copy += 1) await createDraft(page, invoice, copy)
+        for (let copy = found.length; copy < wanted; copy += 1) {
+          await createDraft(page, invoice, copy, runId)
+          probeHref ||= page.url()
+        }
       }
+      if (!probeHref) throw new Error("No draft is available for the worker permission probe")
+      return probeHref
     },
-    async probeWorkerRestrictions(page) {
-      await go(page, "/fourn/facture/card.php?action=create")
-      const workerCannotValidate = (await page.locator('[href*="action=validate"], input[value="Validate"], button[value="Validate"]').count()) === 0
+    async probeWorkerRestrictions(page, draftHref) {
+      const draftUrl = new URL(draftHref, base)
+      draftUrl.searchParams.set("action", "validate")
+      await go(page, `${draftUrl.pathname}${draftUrl.search}`)
+      const workerCannotValidate = await denied(page)
       await go(page, "/fourn/paiement/card.php?action=create")
       return { workerCannotValidate, workerCannotPay: await denied(page) }
     },
@@ -179,7 +226,7 @@ export function dolibarrAdapterFromEnv(env = process.env): ErpAdapter {
       await go(page, "/fourn/facture/card.php?action=create")
       return { verifierCannotMutate: await denied(page) }
     },
-    async readDrafts(page) {
+    async readDrafts(page, runId) {
       await go(page, "/fourn/facture/list.php?button_removefilter_x=x")
       if (await denied(page)) return unavailableBatch()
       const hrefs = await page.locator('a[href*="/fourn/facture/card.php?"]').evaluateAll((links) =>
@@ -190,39 +237,15 @@ export function dolibarrAdapterFromEnv(env = process.env): ErpAdapter {
         await go(page, href)
         if (await denied(page)) return unavailableBatch()
         const body = await page.locator("body").innerText()
+        if (!body.includes(`DoneLedger run ${runId} job `)) continue
         const jobId = body.match(/\bDL-\d{3}\b/)?.[0]
         if (!jobId) continue
-        const supplierId = body.match(/\bSUP-\d{3}\b/)?.[0]
-        const invoiceNumber = body.match(/\bINV-\d+\b/)?.[0]
-        const rows = await page.locator("tr").evaluateAll((items) => items.map((row) =>
-          [...row.querySelectorAll(":scope > td")].map((cell) => (cell.textContent ?? "").replace(/\s+/g, " ").trim()),
-        ))
-        const rowValue = (label: RegExp) => rows.find(([name]) => label.test(name ?? ""))?.slice(1).join(" ") ?? ""
-        const issueDate = dateToIso(rowValue(/Invoice date|Date de facture/i))
-        const dueDate = dateToIso(rowValue(/Due date|Payment due on|Date limite de paiement/i))
-        const lines = await page.locator('#tablelines tr[id^="row-"]').evaluateAll((items) => items.map((row) => ({
-          net: row.querySelector(".linecolht")?.textContent ?? "",
-          gross: row.querySelector(".linecoluttc")?.textContent ?? "",
-        })))
-        const netCents = lines.reduce((sum, line) => sum + moneyToCents(line.net), 0)
-        const grossCents = lines.reduce((sum, line) => sum + moneyToCents(line.gross), 0)
-        if (!supplierId || !invoiceNumber || !issueDate || !dueDate || lines.length === 0) return unavailableBatch()
-        records.push({
-          jobId,
-          recordId: `DOL-${new URL(page.url()).searchParams.get("id") ?? new URL(page.url()).searchParams.get("facid")}`,
-          supplierId,
-          invoiceNumber,
-          issueDate,
-          dueDate,
-          currency: "EUR",
-          netCents,
-          taxCents: grossCents - netCents,
-          grossCents,
-          state: /\bDraft\b|\bBrouillon\b/i.test(body) ? "draft" as const : "posted" as const,
-        })
+        const record = await parseDolibarrDraft(page, jobId)
+        if (!record) return unavailableBatch()
+        records.push(record)
       }
       const observedAt = new Date().toISOString()
-      return { state: "fresh", runId: randomUUID(), observedAt, exportHash: hashObservedRecords(records), records }
+      return { state: "fresh", runId, observedAt, exportHash: hashObservedRecords(records), records }
     },
   }
 }
@@ -248,6 +271,51 @@ export function dateToIso(value: string): string | undefined {
   const month = french ? second : first
   const day = french ? first : second
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+}
+
+async function parseDolibarrDraft(page: BrowserPage, jobId: string, expected?: ExpectedInvoice) {
+  const body = await page.locator("body").innerText()
+  const supplierId = expected
+    ? body.includes(expected.supplierId) ? expected.supplierId : undefined
+    : body.match(/\bSUP-\d{3}\b/)?.[0]
+  const invoiceNumber = expected
+    ? body.includes(expected.invoiceNumber) ? expected.invoiceNumber : undefined
+    : body.match(/\bINV-[A-Za-z0-9-]+\b/)?.[0]
+  const rows = await page.locator("tr").evaluateAll((items) => items.map((row) =>
+    [...row.querySelectorAll(":scope > td")].map((cell) => (cell.textContent ?? "").replace(/\s+/g, " ").trim()),
+  ))
+  const rowValue = (label: RegExp) => rows.find(([name]) => label.test(name ?? ""))?.slice(1).join(" ") ?? ""
+  const issueDate = dateToIso(rowValue(/Invoice date|Date de facture/i))
+  const dueDate = dateToIso(rowValue(/Due date|Payment due on|Date limite de paiement/i))
+  const lines = await page.locator('#tablelines tr[id^="row-"]').evaluateAll((items) => items.map((row) => ({
+    net: row.querySelector(".linecolht")?.textContent ?? "",
+    gross: row.querySelector(".linecoluttc")?.textContent ?? "",
+  })))
+  if (!supplierId || !invoiceNumber || !issueDate || !dueDate || lines.length === 0) return undefined
+  const netCents = lines.reduce((sum, line) => sum + moneyToCents(line.net), 0)
+  const grossCents = lines.reduce((sum, line) => sum + moneyToCents(line.gross), 0)
+  return {
+    jobId,
+    recordId: `DOL-${new URL(page.url()).searchParams.get("id") ?? new URL(page.url()).searchParams.get("facid")}`,
+    supplierId,
+    invoiceNumber,
+    issueDate,
+    dueDate,
+    currency: "EUR",
+    netCents,
+    taxCents: grossCents - netCents,
+    grossCents,
+    state: /\bDraft\b|\bBrouillon\b/i.test(body) ? "draft" as const : "posted" as const,
+  }
+}
+
+export function scopeManifestForRun(
+  invoices: readonly ExpectedInvoice[],
+  runId: string,
+): ExpectedInvoice[] {
+  if (!/^[a-f0-9-]{36}$/i.test(runId)) throw new Error("runId must be a UUID")
+  const suffix = runId.slice(0, 8)
+  return invoices.map((invoice) => ({ ...invoice, invoiceNumber: `${invoice.invoiceNumber}-${suffix}` }))
 }
 
 const COMPARATOR = String.raw`
@@ -388,6 +456,8 @@ export async function runLive(
 
   const browsers = new Solari({ apiKey: config.apiKey })
   const compute = new SolariClient({ apiKey: config.apiKey })
+  const runId = randomUUID()
+  const manifest = scopeManifestForRun(groundTruth, runId)
   const opened = new Set<BrowserSession>()
   let sandbox: Sandbox | undefined
   let output: Omit<LiveRunResult, "lifecycle"> | undefined
@@ -399,8 +469,8 @@ export async function runLive(
     const workerPage = await workerContext.newPage()
     workerPage.setDefaultTimeout(8_000)
     await workerPage.goto(adapter.workerUrl.href)
-    const workerPermissions = await adapter.probeWorkerRestrictions(workerPage)
-    await adapter.writeDrafts(workerPage, groundTruth)
+    const draftHref = await adapter.writeDrafts(workerPage, manifest, runId)
+    const workerPermissions = await adapter.probeWorkerRestrictions(workerPage, draftHref)
     await releaseBrowser(browsers, worker)
     opened.delete(worker)
 
@@ -412,7 +482,8 @@ export async function runLive(
     verifierPage.setDefaultTimeout(8_000)
     await verifierPage.goto(adapter.verifierUrl.href)
     const verifierPermissions = await adapter.probeVerifierRestrictions(verifierPage)
-    const observed = validateObservedBatch(await adapter.readDrafts(verifierPage))
+    const observed = validateObservedBatch(await adapter.readDrafts(verifierPage, runId))
+    if (observed.runId !== runId) throw new Error("ERP observation is not bound to the active run")
     await releaseBrowser(browsers, verifier)
     opened.delete(verifier)
 
@@ -427,10 +498,10 @@ export async function runLive(
       lifecycle: { onTimeout: "kill" },
     })
 
-    const local = verifyBatch(groundTruth, observed)
-    const remote = await compareInSandbox(sandbox, groundTruth, observed)
+    const local = verifyBatch(manifest, observed)
+    const remote = await compareInSandbox(sandbox, manifest, observed)
     if (!isDeepStrictEqual(local, remote)) throw new Error("Local and sandbox verdicts disagree")
-    output = { summary: remote, observed, permissions }
+    output = { runId, manifest, summary: remote, observed, permissions }
   } finally {
     const cleanup = await Promise.allSettled([
       ...(sandbox ? [sandbox.kill()] : []),
@@ -442,4 +513,103 @@ export async function runLive(
   }
   if (!output) throw new Error("Live run did not produce an artifact")
   return { ...output, lifecycle: { browsersReleased: true, sandboxKilled: true } }
+}
+
+export async function runReadOnlyLive(
+  manifest: readonly ExpectedInvoice[],
+  connection: DolibarrConnection,
+  apiKey: string,
+  options: { runId?: string; signal?: AbortSignal; onProgress?: (step: "browser" | "compare" | "cleanup") => void } = {},
+): Promise<ReadOnlyLiveResult> {
+  if (manifest.length < 1 || manifest.length > 25) throw new Error("A live run requires 1 to 25 claims")
+  if (!apiKey.trim() || !connection.username.trim() || !connection.password) throw new Error("Live credentials are required")
+  const baseUrl = safeDolibarrUrl(connection.baseUrl)
+  await assertPublicDolibarrDns(baseUrl)
+  const runId = options.runId ?? randomUUID()
+  const browsers = new Solari({ apiKey, maxAttempts: 1 })
+  const compute = new SolariClient({ apiKey })
+  let browser: BrowserSession | undefined
+  let sandbox: Sandbox | undefined
+  let observed: ObservedBatch | undefined
+  let summary: VerificationSummary | undefined
+
+  try {
+    options.signal?.throwIfAborted()
+    options.onProgress?.("browser")
+    browser = await browsers.launch({ proxy: "off", recording: false, retries: 0 })
+    const page = await browser.newPage()
+    page.setDefaultTimeout(8_000)
+    const go = (path: string) => page.goto(new URL(path, baseUrl).href, { waitUntil: "domcontentloaded", timeout: 10_000 })
+    const denied = async () => /access denied|accès refusé/i.test(await page.locator("body").innerText())
+
+    await page.goto(baseUrl.href, { waitUntil: "domcontentloaded", timeout: 10_000 })
+    if (await page.locator("#username").count()) {
+      await page.locator("#username").fill(connection.username)
+      await page.locator("#password").fill(connection.password)
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
+        page.locator('button[type="submit"], input[type="submit"]').click(),
+      ])
+    }
+    if (await page.locator("#username").count()) throw new Error("Dolibarr login failed")
+
+    await go("/fourn/facture/card.php?action=create")
+    const verifierCannotMutate = await denied()
+    await go("/fourn/paiement/card.php?action=create")
+    const verifierCannotPay = await denied()
+    if (!verifierCannotMutate || !verifierCannotPay) throw new Error("The Dolibarr account is not read-only")
+
+    const records = []
+    for (const expected of manifest) {
+      options.signal?.throwIfAborted()
+      await go(`/fourn/facture/list.php?search_refsupplier=${encodeURIComponent(expected.invoiceNumber)}`)
+      if (await denied()) throw new Error("The Dolibarr account cannot read supplier invoices")
+      const hrefs = await page.locator('a[href*="/fourn/facture/card.php?"]').evaluateAll((links) =>
+        [...new Set(links.map((link) => link.getAttribute("href")).filter((href): href is string => typeof href === "string" && /[?&](?:id|facid)=\d+/.test(href)))],
+      )
+      for (const href of hrefs) {
+        await go(href)
+        const record = await parseDolibarrDraft(page, expected.jobId, expected)
+        if (record) records.push(record)
+      }
+    }
+    observed = {
+      state: "fresh",
+      runId,
+      observedAt: new Date().toISOString(),
+      exportHash: hashObservedRecords(records),
+      records,
+    }
+    await releaseBrowser(browsers, browser)
+    browser = undefined
+
+    options.signal?.throwIfAborted()
+    options.onProgress?.("compare")
+    sandbox = await compute.sandboxes.create({
+      template: "base",
+      timeoutMs: 5 * 60_000,
+      lifecycle: { onTimeout: "kill" },
+    })
+    const local = verifyBatch(manifest, observed)
+    const remote = await compareInSandbox(sandbox, manifest, observed)
+    if (!isDeepStrictEqual(local, remote)) throw new Error("Local and sandbox verdicts disagree")
+    summary = remote
+  } finally {
+    options.onProgress?.("cleanup")
+    const cleanup = await Promise.allSettled([
+      ...(sandbox ? [sandbox.kill()] : []),
+      ...(browser ? [releaseBrowser(browsers, browser)] : []),
+    ])
+    await browsers.close()
+    if (cleanup.some((result) => result.status === "rejected")) throw new Error("One or more Solari resources failed to clean up")
+  }
+  if (!observed || !summary) throw new Error("Live run did not produce an artifact")
+  return {
+    runId,
+    manifest,
+    observed,
+    summary,
+    permissions: { verifierCannotMutate: true, verifierCannotPay: true },
+    lifecycle: { browsersReleased: true, sandboxKilled: true },
+  }
 }

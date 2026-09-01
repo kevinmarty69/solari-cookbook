@@ -1,225 +1,122 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="DoneLedger independently checks work claimed complete by an AI worker against fresh system-of-record evidence.">
-    <title>DoneLedger — Independent evidence for agent work</title>
-    <link rel="stylesheet" href="styles.css">
-  </head>
-  <body>
-    <a class="skip-link" href="#evidence">Skip to evidence</a>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6f3">
+  <meta name="description" content="DoneLedger checks AI-completed invoice work against fresh, read-only ERP evidence.">
+  <title>DoneLedger — Verify agent work in your ERP</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to Content</a>
+  <header class="site-header">
+    <nav class="nav-shell" aria-label="Primary navigation">
+      <a class="wordmark" href="#/" aria-label="DoneLedger home"><span class="mark" aria-hidden="true">D</span><span>DoneLedger</span></a>
+      <div class="nav-links">
+        <a href="#/runs">Runs</a><a href="#/new">New Verification</a><a href="https://github.com/kevinmarty69/solari-cookbook/tree/main/examples/doneledger">GitHub</a>
+        <button class="button primary compact" type="button" data-action="demo">Try Sample</button>
+      </div>
+    </nav>
+  </header>
 
-    <header class="site-header">
-      <nav class="nav-shell" aria-label="Primary navigation">
-        <a class="wordmark" href="#top" aria-label="DoneLedger home">
-          <span class="mark" aria-hidden="true">D</span>
-          <span>DoneLedger</span>
-        </a>
-        <div class="nav-links">
-          <a href="#architecture">Architecture</a>
-          <a href="#limits">Limits</a>
-          <a href="../results/run.json">Raw JSON</a>
-          <a class="github-link" href="https://github.com/kevinmarty69/solari-cookbook/tree/main/examples/doneledger">GitHub</a>
+  <main id="main">
+    <section class="view" id="landing-view" aria-labelledby="landing-title">
+      <div class="landing-hero shell">
+        <div class="landing-copy">
+          <p class="eyebrow">Independent ERP Verification</p>
+          <h1 id="landing-title">Your agent says it’s done. <span>Check the ledger.</span></h1>
+          <p class="landing-summary">DoneLedger compares an agent’s invoice manifest with fresh, read-only Dolibarr evidence — then shows every mismatch.</p>
+          <div class="hero-actions"><button class="button primary" type="button" data-action="demo">Try Sample Run</button><a class="button secondary" href="#/new">Verify My Dolibarr</a></div>
+          <p class="microcopy">No account for the sample. Your Dolibarr connection stays read-only.</p>
         </div>
-      </nav>
-    </header>
-
-    <main id="top">
-      <section class="hero shell" aria-labelledby="page-title">
-        <div class="hero-copy">
-          <div class="eyebrow-row">
-            <p class="eyebrow">Public verification run</p>
-            <span class="source-badge" id="source-badge" data-mode="loading">Loading evidence</span>
-          </div>
-          <h1 id="page-title">The worker reported <span id="hero-claimed">20</span> drafts complete. An independent check found <span id="hero-exceptions">3</span> exceptions.</h1>
-          <p class="hero-summary">DoneLedger verifies fresh system-of-record state instead of trusting the worker’s own completion report.</p>
-          <div class="hero-actions">
-            <a class="button primary" id="inspect-cta" href="#evidence">Inspect 3 exceptions</a>
-            <a class="button secondary" href="#architecture">How verification works</a>
-          </div>
-          <p class="evidence-boundary" id="evidence-boundary" role="status">Loading the run boundary…</p>
-          <p class="validation-alert" id="validation-alert" role="alert" hidden></p>
+        <div class="product-preview" aria-label="Example verification result">
+          <div class="preview-head"><span class="live-dot">Sample Evidence</span><code>DL-SAMPLE</code></div>
+          <div class="preview-score"><strong>17</strong><span>of 20 verified</span></div>
+          <div class="preview-bars" aria-hidden="true"><span></span><span></span><span></span><span class="bad"></span><span class="bad"></span></div>
+          <div class="preview-issue"><span>TAX_MISMATCH</span><strong>€162.00 difference</strong></div>
+          <div class="preview-issue"><span>DUPLICATE_RECORD</span><strong>2 records found</strong></div>
+          <div class="preview-footer"><span>Fresh browser read</span><span>Sandbox compared</span></div>
         </div>
+      </div>
+      <div class="value-strip"><div class="shell value-grid">
+        <article><span>01</span><h2>Upload the Claim</h2><p>Bring the CSV your agent says it completed.</p></article>
+        <article><span>02</span><h2>Connect Read-Only</h2><p>DoneLedger reads fresh Dolibarr state without changing it.</p></article>
+        <article><span>03</span><h2>Share the Verdict</h2><p>Share a time-limited report with exact differences and provenance.</p></article>
+      </div></div>
+    </section>
 
-        <aside class="run-overview" aria-label="Run summary">
-          <div class="metric-grid">
-            <div><strong id="claimed-count">20</strong><span>Claimed</span></div>
-            <div><strong id="verified-count">17</strong><span>Verified</span></div>
-            <div class="metric-exception"><strong id="exception-count">3</strong><span>Exceptions</span></div>
-            <div><strong id="unknown-count">0</strong><span>Unknown</span></div>
-          </div>
-          <ol class="verification-rail" aria-label="Verification sequence">
-            <li><span>1</span><div><strong>Worker</strong><small>Creates drafts</small></div></li>
-            <li><span>2</span><div><strong>Fresh read</strong><small>New browser session</small></div></li>
-            <li><span>3</span><div><strong>Compare</strong><small>Sandbox verdict</small></div></li>
-          </ol>
-        </aside>
-      </section>
-
-      <section class="evidence-section shell" id="evidence" aria-labelledby="evidence-title">
-        <div class="section-intro">
-          <div>
-            <p class="eyebrow">Evidence workspace</p>
-            <h2 id="evidence-title">Inspect the verdict</h2>
-          </div>
-          <div class="run-identity">
-            <span>Run</span>
-            <code id="run-id">loading</code>
-          </div>
-        </div>
-
-        <div class="filter-bar" aria-label="Filter evidence by verdict">
-          <div class="filter-group" id="filter-group">
-            <button type="button" data-filter="exceptions" aria-pressed="true">Exceptions <span id="filter-exceptions-count">3</span></button>
-            <button type="button" data-filter="all" aria-pressed="false">All <span id="filter-all-count">20</span></button>
-            <button type="button" data-filter="verified" aria-pressed="false">Verified <span id="filter-verified-count">17</span></button>
-            <button type="button" data-filter="unknown" aria-pressed="false">Unknown <span id="filter-unknown-count">0</span></button>
-          </div>
-          <a class="raw-link" href="../results/run.json">Open raw artifact</a>
-        </div>
-
-        <div class="evidence-workspace">
-          <div class="evidence-list">
-            <div class="desktop-table-wrap">
-              <table>
-                <caption class="sr-only">Verification results for the selected run</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Job</th>
-                    <th scope="col">Reason</th>
-                    <th scope="col">Expected</th>
-                    <th scope="col">Observed</th>
-                    <th scope="col">ERP records</th>
-                    <th scope="col">Verdict</th>
-                  </tr>
-                </thead>
-                <tbody id="evidence-body"></tbody>
-              </table>
-            </div>
-            <div class="mobile-cards" id="mobile-cards"></div>
-            <p class="empty-state" id="empty-state" hidden>No evidence matches this filter.</p>
-          </div>
-
-          <aside class="inspector" id="inspector" aria-labelledby="inspector-title">
-            <div class="inspector-heading">
-              <div>
-                <p class="eyebrow">Selected evidence</p>
-                <h3 id="inspector-title">DL-018</h3>
-              </div>
-              <span class="status-badge exception" id="inspector-status">Exception</span>
-            </div>
-            <p class="reason-title" id="inspector-reason">TAX_MISMATCH</p>
-
-            <dl class="comparison-grid">
-              <div><dt>Expected total</dt><dd id="inspector-expected">—</dd></div>
-              <div><dt>Observed total</dt><dd id="inspector-observed">—</dd></div>
-            </dl>
-
-            <section class="inspector-block" aria-labelledby="differences-title">
-              <h4 id="differences-title">Exact differences</h4>
-              <div id="inspector-differences"></div>
-            </section>
-            <section class="inspector-block" aria-labelledby="provenance-title">
-              <h4 id="provenance-title">Provenance</h4>
-              <dl class="detail-list">
-                <div><dt>ERP records</dt><dd id="inspector-records">—</dd></div>
-                <div><dt>Manifest</dt><dd id="inspector-manifest">—</dd></div>
-                <div><dt>Export</dt><dd id="inspector-export">—</dd></div>
-              </dl>
-            </section>
-            <button class="button secondary copy-button" id="copy-evidence" type="button">Copy evidence JSON</button>
-            <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
-          </aside>
-        </div>
-      </section>
-
-      <section class="architecture-section shell" id="architecture" aria-labelledby="architecture-title">
-        <div class="section-intro narrow">
-          <div>
-            <p class="eyebrow">Authority boundary</p>
-            <h2 id="architecture-title">The worker never approves itself.</h2>
-          </div>
-          <p>This is the intended architecture. Per-run permission probes below show what the loaded artifact actually proves.</p>
-        </div>
-
-        <ol class="architecture-flow">
-          <li>
-            <span class="flow-index">01</span>
-            <div><strong>Worker browser</strong><p>Creates supplier-invoice drafts with write-limited ERP credentials.</p></div>
-            <span class="permission-chip">No validate · No pay</span>
-          </li>
-          <li>
-            <span class="flow-index">02</span>
-            <div><strong>System of record</strong><p>Holds the actual draft records. Worker output is not verification input.</p></div>
-            <span class="permission-chip neutral">Fresh state</span>
-          </li>
-          <li>
-            <span class="flow-index">03</span>
-            <div><strong>Verifier browser</strong><p>Uses a separate profile and read-only ERP credentials to export state.</p></div>
-            <span class="permission-chip">No mutation</span>
-          </li>
-          <li>
-            <span class="flow-index">04</span>
-            <div><strong>Sandbox comparator</strong><p>Compares the source manifest with the independent export and emits this artifact.</p></div>
-            <span class="permission-chip neutral">Deterministic</span>
-          </li>
+    <section class="view app-view shell" id="wizard-view" hidden aria-labelledby="wizard-title">
+      <header class="page-heading"><div><p class="eyebrow">New Verification</p><h1 id="wizard-title">Verify a Dolibarr run</h1></div><p>Upload what should exist, connect a read-only account, then review before the run starts.</p></header>
+      <div class="wizard-layout">
+        <ol class="stepper" aria-label="Verification setup steps">
+          <li class="active" data-step-indicator="1"><span>1</span><div><strong>Import CSV</strong><small>Expected invoices</small></div></li>
+          <li data-step-indicator="2"><span>2</span><div><strong>Connect ERP</strong><small>Read-only Dolibarr</small></div></li>
+          <li data-step-indicator="3"><span>3</span><div><strong>Review</strong><small>Confirm the scope</small></div></li>
         </ol>
+        <form class="wizard-card" id="run-form" novalidate>
+          <section class="wizard-step" data-step="1" aria-labelledby="import-title">
+            <div class="card-heading"><div><p class="step-kicker">Step 1 of 3</p><h2 id="import-title">Import the Agent Manifest</h2></div><button class="text-button" type="button" data-action="sample-csv">Use Sample Data</button></div>
+            <p class="supporting">Required columns: job_id, supplier_id, invoice_number, issue_date, due_date, currency, net, tax, gross.</p>
+            <label class="drop-zone" for="manifest-file" id="drop-zone"><span class="upload-icon" aria-hidden="true">↑</span><strong>Choose a CSV or drop it here</strong><span>CSV only · 25 rows · 2 MB maximum</span><input id="manifest-file" name="manifest" type="file" accept=".csv,text/csv" required></label>
+            <p class="field-error" id="file-error" role="alert"></p>
+            <div class="import-preview" id="import-preview" hidden><div class="import-summary"><strong id="file-name"></strong><span id="row-count"></span><button type="button" class="text-button" data-action="remove-file">Remove</button></div><div class="table-scroll"><table><caption class="sr-only">CSV preview</caption><thead id="preview-head"></thead><tbody id="preview-body"></tbody></table></div></div>
+            <div class="form-actions"><a class="button ghost" href="#/">Cancel</a><button class="button primary" id="to-connect" type="button">Continue to Connection</button></div>
+          </section>
 
-        <div class="proof-grid">
-          <article>
-            <h3>Permission evidence</h3>
-            <dl class="check-list">
-              <div><dt>Worker cannot validate</dt><dd id="permission-validate">Not recorded</dd></div>
-              <div><dt>Worker cannot pay</dt><dd id="permission-pay">Not recorded</dd></div>
-              <div><dt>Verifier cannot mutate</dt><dd id="permission-mutate">Not recorded</dd></div>
-            </dl>
-          </article>
-          <article>
-            <h3>Resource lifecycle</h3>
-            <dl class="check-list">
-              <div><dt>Browsers released</dt><dd id="lifecycle-browsers">Not recorded</dd></div>
-              <div><dt>Sandbox killed</dt><dd id="lifecycle-sandbox">Not recorded</dd></div>
-              <div><dt>Generated at</dt><dd id="generated-at">Not recorded</dd></div>
-            </dl>
-          </article>
-        </div>
+          <section class="wizard-step" data-step="2" hidden aria-labelledby="connection-title">
+            <div class="card-heading"><div><p class="step-kicker">Step 2 of 3</p><h2 id="connection-title">Connect Dolibarr Read-Only</h2></div><span class="security-chip">Server-Side Only</span></div>
+            <p class="supporting">DoneLedger verifies work performed by an external agent. Use one dedicated account with supplier-invoice read access. The live run will fail unless create and payment actions are denied.</p>
+            <div class="form-grid">
+              <div class="field full"><label for="erp-url">Dolibarr URL</label><input id="erp-url" name="erpUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://your-company.example…" required></div>
+              <div class="field"><label for="erp-username">Read-Only Username</label><input id="erp-username" name="erpUsername" type="text" autocomplete="username" spellcheck="false" placeholder="doneledger-verifier…" required></div>
+              <div class="field"><label for="erp-password">Password</label><input id="erp-password" name="erpPassword" type="password" autocomplete="current-password" placeholder="Enter the account password…" required></div>
+              <div class="field full"><label for="access-code">Private Beta Access Code</label><input id="access-code" name="accessCode" type="password" autocomplete="off" spellcheck="false" placeholder="Enter your access code…" required></div>
+            </div>
+            <p class="field-error" id="connection-error" role="alert"></p>
+            <div class="connection-proof" id="connection-proof" hidden><div><span class="proof-icon">✓</span><strong>Connection Details Added</strong><small id="connected-host"></small></div><dl><div><dt>Read Supplier Invoices</dt><dd>Required</dd></div><div><dt>Create + Payment Access</dt><dd>Must Be Denied</dd></div></dl></div>
+            <div class="form-actions"><button class="button ghost" type="button" data-back="1">Back</button><button class="button primary" id="to-review" type="button">Review Verification</button></div>
+          </section>
+
+          <section class="wizard-step" data-step="3" hidden aria-labelledby="review-title">
+            <div class="card-heading"><div><p class="step-kicker">Step 3 of 3</p><h2 id="review-title">Review the Verification</h2></div><span class="security-chip">No ERP Mutation</span></div>
+            <div class="review-list"><div><span>Manifest</span><strong id="review-file">—</strong><small id="review-rows">—</small></div><div><span>System of Record</span><strong id="review-host">—</strong><small>Read-only verifier session</small></div><div><span>Method</span><strong>Fresh Browser + Sandbox</strong><small>Independent state comparison</small></div></div>
+            <label class="confirm-scope"><input id="scope-confirm" type="checkbox" required><span>I confirm this verification may read the listed supplier-invoice records. It will not change, validate or pay them.</span></label>
+            <p class="field-error" id="submit-error" role="alert"></p>
+            <div class="form-actions"><button class="button ghost" type="button" data-back="2">Back</button><button class="button primary" id="start-run" type="submit">Start Verification</button></div>
+          </section>
+        </form>
+      </div>
+    </section>
+
+    <section class="view app-view shell" id="progress-view" hidden aria-labelledby="progress-title">
+      <header class="page-heading progress-heading"><div><p class="eyebrow">Verification in Progress</p><h1 id="progress-title">Checking Fresh ERP Evidence</h1></div><div class="run-meta"><span>Run</span><code id="progress-run-id">—</code></div></header>
+      <div class="progress-card"><div class="progress-top"><div><span class="spinner" aria-hidden="true"></span><strong id="progress-label">Starting the run…</strong></div><span id="progress-time">0s</span></div><div class="progress-bar" role="progressbar" aria-label="Verification progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="progress-fill"></span></div>
+        <ol class="run-steps" id="run-steps"><li data-run-step="validate"><span>1</span><div><strong>Validate Manifest</strong><small>Check schema and totals</small></div><em>Pending</em></li><li data-run-step="browser"><span>2</span><div><strong>Read Fresh ERP State</strong><small>Open an isolated verifier browser</small></div><em>Pending</em></li><li data-run-step="compare"><span>3</span><div><strong>Compare in Sandbox</strong><small>Compute exact differences</small></div><em>Pending</em></li><li data-run-step="cleanup"><span>4</span><div><strong>Release Resources</strong><small>Close browser and sandbox</small></div><em>Pending</em></li><li data-run-step="report"><span>5</span><div><strong>Publish Verdict</strong><small>Save the evidence report</small></div><em>Pending</em></li></ol>
+        <p class="progress-status" id="progress-status" role="status" aria-live="polite"></p><div class="form-actions"><a class="button secondary" href="#/runs">View All Runs</a></div>
+      </div>
+    </section>
+
+    <section class="view app-view shell" id="runs-view" hidden aria-labelledby="runs-title">
+      <header class="page-heading"><div><p class="eyebrow">Run History</p><h1 id="runs-title">Verification Runs</h1></div><a class="button primary" href="#/new">New Verification</a></header>
+      <div class="history-card"><div class="history-toolbar"><label class="search-field"><span class="sr-only">Search runs</span><input id="run-search" type="search" placeholder="Search by run or file…" autocomplete="off"></label><button class="button secondary compact" type="button" data-action="refresh-runs">Refresh</button></div><div class="table-scroll"><table class="history-table"><caption class="sr-only">Verification run history</caption><thead><tr><th scope="col">Run</th><th scope="col">Created</th><th scope="col">Result</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody id="runs-body"></tbody></table></div>
+        <div class="empty-history" id="empty-history" hidden><span aria-hidden="true">◎</span><h2>No Verification Runs Yet</h2><p>Run the sample or connect Dolibarr to create your first report.</p><div><button class="button secondary" type="button" data-action="demo">Try Sample</button><a class="button primary" href="#/new">New Verification</a></div></div><p class="load-error" id="runs-error" role="alert"></p>
+      </div>
+    </section>
+
+    <section class="view" id="report-view" hidden aria-labelledby="page-title">
+      <section class="report-hero shell"><div class="hero-copy"><div class="eyebrow-row"><p class="eyebrow">Verification Report</p><span class="source-badge" id="source-badge" data-mode="loading">Loading Evidence</span></div><h1 id="page-title">The manifest claimed <span id="hero-claimed">20</span> records. An independent check found <span id="hero-exceptions">3</span> exceptions.</h1><p class="hero-summary">A fresh snapshot of matching ERP records, not proof of who created them.</p><div class="hero-actions"><a class="button primary" id="inspect-cta" href="#evidence">Inspect Exceptions</a><button class="button secondary" id="share-run" type="button">Share for 7 Days</button><button class="button secondary" id="revoke-share" type="button" hidden>Revoke Public Link</button><button class="button danger-button" id="delete-run" type="button">Delete</button></div><p class="evidence-boundary" id="evidence-boundary" role="status">Loading the run boundary…</p><p class="validation-alert" id="validation-alert" role="alert" hidden></p><p class="share-status" id="share-status" role="status" aria-live="polite"></p></div><aside class="run-overview" aria-label="Run summary"><div class="metric-grid"><div><strong id="claimed-count">20</strong><span>Claimed</span></div><div><strong id="verified-count">17</strong><span>Verified</span></div><div class="metric-exception"><strong id="exception-count">3</strong><span>Exceptions</span></div><div><strong id="unknown-count">0</strong><span>Unknown</span></div></div></aside></section>
+      <section class="replay-section shell" aria-labelledby="replay-title"><div class="section-intro narrow"><div><p class="eyebrow">Proof Graph</p><h2 id="replay-title">Follow the Evidence Chain</h2></div><p>Select a checkpoint to inspect which saved artifact entered the decision.</p></div><div class="replay-grid"><ol class="replay-rail" aria-label="Evidence checkpoints"><li><button type="button" data-replay="claim" aria-pressed="true"><span>1</span><div><strong>Agent Claim</strong><small id="replay-claim-count">20 manifest rows</small></div></button></li><li><button type="button" data-replay="read" aria-pressed="false"><span>2</span><div><strong>Fresh ERP Read</strong><small>Independent browser session</small></div></button></li><li><button type="button" data-replay="compare" aria-pressed="false"><span>3</span><div><strong>Sandbox Compare</strong><small>Deterministic field checks</small></div></button></li><li><button type="button" data-replay="verdict" aria-pressed="false"><span>4</span><div><strong>Evidence Verdict</strong><small id="replay-verdict-count">3 exceptions</small></div></button></li></ol><article class="replay-inspector" aria-live="polite"><p class="step-kicker" id="replay-kicker">Checkpoint 1</p><h3 id="replay-heading">Agent Claim</h3><p id="replay-copy">The uploaded manifest defines exactly what the external agent claimed to have completed.</p><dl><div><dt id="replay-label-a">Claimed Records</dt><dd id="replay-value-a">20</dd></div><div><dt id="replay-label-b">Manifest Fingerprint</dt><dd><code id="replay-value-b">—</code></dd></div></dl><button class="text-button" id="replay-action" type="button">Inspect Manifest Evidence</button></article></div></section>
+      <section class="evidence-section shell" id="evidence" aria-labelledby="evidence-title"><div class="section-intro"><div><p class="eyebrow">Evidence Workspace</p><h2 id="evidence-title">Inspect the Verdict</h2></div><div class="run-identity"><span>Run</span><code id="run-id">loading</code></div></div><div class="filter-bar"><div class="filter-group" id="filter-group" role="group" aria-label="Filter evidence by verdict"><button type="button" data-filter="exceptions" aria-pressed="true">Exceptions <span id="filter-exceptions-count">3</span></button><button type="button" data-filter="all" aria-pressed="false">All <span id="filter-all-count">20</span></button><button type="button" data-filter="verified" aria-pressed="false">Verified <span id="filter-verified-count">17</span></button><button type="button" data-filter="unknown" aria-pressed="false">Unknown <span id="filter-unknown-count">0</span></button></div><button class="raw-link" id="download-json" type="button">Download JSON</button></div>
+        <div class="evidence-workspace"><div class="evidence-list"><div class="desktop-table-wrap"><table><caption class="sr-only">Verification results for the selected run</caption><thead><tr><th scope="col">Job</th><th scope="col">Reason</th><th scope="col">Expected</th><th scope="col">Observed</th><th scope="col">ERP Records</th><th scope="col">Verdict</th></tr></thead><tbody id="evidence-body"></tbody></table></div><div class="mobile-cards" id="mobile-cards"></div><p class="empty-state" id="empty-state" hidden>No evidence matches this filter.</p></div><aside class="inspector" id="inspector" aria-labelledby="inspector-title"><div class="inspector-heading"><div><p class="eyebrow">Selected Evidence</p><h3 id="inspector-title">—</h3></div><span class="status-badge exception" id="inspector-status">Exception</span></div><p class="reason-title" id="inspector-reason">—</p><dl class="comparison-grid"><div><dt>Expected Total</dt><dd id="inspector-expected">—</dd></div><div><dt>Observed Total</dt><dd id="inspector-observed">—</dd></div></dl><section class="inspector-block" aria-labelledby="differences-title"><h4 id="differences-title">Exact Differences</h4><div id="inspector-differences"></div></section><section class="inspector-block" aria-labelledby="provenance-title"><h4 id="provenance-title">Provenance</h4><dl class="detail-list"><div><dt>ERP Records</dt><dd id="inspector-records">—</dd></div><div><dt>Manifest</dt><dd id="inspector-manifest">—</dd></div><div><dt>Export</dt><dd id="inspector-export">—</dd></div></dl></section><button class="button secondary copy-button" id="copy-evidence" type="button">Copy Evidence JSON</button><p class="copy-status" id="copy-status" role="status" aria-live="polite"></p></aside></div><p class="sr-only" id="results-announcement" aria-live="polite"></p>
       </section>
+      <section class="integrity-section shell" aria-labelledby="integrity-title"><div class="section-intro narrow"><div><p class="eyebrow">Evidence Integrity</p><h2 id="integrity-title">The Verification Boundary Stays Visible</h2></div><p>A live label requires both permission probes and resource cleanup. Source ERP rows are not retained, so fingerprints identify compared inputs but cannot be recalculated from this report.</p></div><div class="proof-grid"><article><h3>Permission Evidence</h3><dl class="check-list"><div><dt>Invoice Creation Denied</dt><dd id="permission-mutate">Not recorded</dd></div><div><dt>ERP Snapshot Captured</dt><dd id="permission-validate">Not recorded</dd></div><div><dt>Payment Creation Denied</dt><dd id="permission-pay">Not recorded</dd></div></dl></article><article><h3>Resource Lifecycle</h3><dl class="check-list"><div><dt>Browsers Released</dt><dd id="lifecycle-browsers">Not recorded</dd></div><div><dt>Sandbox Killed</dt><dd id="lifecycle-sandbox">Not recorded</dd></div><div><dt>Generated At</dt><dd id="generated-at">Not recorded</dd></div></dl></article></div><dl class="hash-list"><div><dt>Manifest Fingerprint</dt><dd><code id="manifest-hash">Not recorded</code></dd></div><div><dt>ERP Read Fingerprint</dt><dd><code id="export-hash">Not recorded</code></dd></div><div><dt>Artifact Validation</dt><dd id="artifact-validation">Pending</dd></div></dl></section>
+      <aside class="limits-section shell" aria-labelledby="limits-title"><div><p class="eyebrow">Evidence Boundary</p><h2 id="limits-title">What This Does Not Prove</h2></div><ul><li>A verified draft is not approved, payable or paid.</li><li>A synthetic run is not a customer result.</li><li>One run does not prove future reliability.</li></ul><p id="disclaimer-copy">Loading the artifact disclaimer…</p></aside>
+    </section>
+  </main>
 
-      <section class="integrity-section shell" aria-labelledby="integrity-title">
-        <div class="section-intro narrow">
-          <div>
-            <p class="eyebrow">Evidence integrity</p>
-            <h2 id="integrity-title">Claims stay attached to artifacts.</h2>
-          </div>
-          <p>A live label is accepted only when hashes, cleanup and all three negative permission probes are present and true.</p>
-        </div>
-        <dl class="hash-list">
-          <div><dt>Manifest SHA-256</dt><dd><code id="manifest-hash">Not recorded</code></dd></div>
-          <div><dt>Export SHA-256</dt><dd><code id="export-hash">Not recorded</code></dd></div>
-          <div><dt>Artifact validation</dt><dd id="artifact-validation">Pending</dd></div>
-        </dl>
-      </section>
-
-      <aside class="limits-section shell" id="limits" aria-labelledby="limits-title">
-        <div>
-          <p class="eyebrow">Demonstration limits</p>
-          <h2 id="limits-title">What this does not prove</h2>
-        </div>
-        <ul>
-          <li>A verified draft is not approved, posted, payable or paid.</li>
-          <li>A synthetic run is not a customer result or compliance assessment.</li>
-          <li>One successful run does not prove future reliability or production readiness.</li>
-        </ul>
-        <p id="disclaimer-copy">Loading the artifact disclaimer…</p>
-      </aside>
-    </main>
-
-    <footer class="site-footer shell">
-      <span>DoneLedger · Evidence, not self-reporting</span>
-      <div><a href="../results/run.json">Raw JSON</a><a href="https://github.com/kevinmarty69/solari-cookbook/tree/main/examples/doneledger">Source on GitHub</a></div>
-    </footer>
-
-    <script src="app.js" defer></script>
-  </body>
+  <dialog id="delete-dialog"><form method="dialog"><h2>Delete This Run?</h2><p>The saved report and its public share link will stop working. This cannot be undone.</p><div class="dialog-actions"><button class="button secondary" value="cancel">Keep Run</button><button class="button danger-button" id="confirm-delete" value="confirm">Delete Run</button></div></form></dialog>
+  <footer class="site-footer shell"><span>DoneLedger · Evidence, Not Self-Reporting</span><div><a href="#/runs">Runs</a><a href="https://github.com/kevinmarty69/solari-cookbook/tree/main/examples/doneledger">Source on GitHub</a></div></footer>
+  <script src="/app.js" defer></script>
+</body>
 </html>
