@@ -1,5 +1,6 @@
 node_modules/
 package-lock.json
+!examples/doneledger/package-lock.json
 .env
 __pycache__/
 *.pyc

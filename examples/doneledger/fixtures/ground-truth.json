@@ -1,0 +1,22 @@
+[
+  {"jobId":"DL-001","supplierId":"SUP-001","invoiceNumber":"INV-1001","issueDate":"2026-08-01","dueDate":"2026-08-31","currency":"EUR","netCents":10000,"taxCents":2000,"grossCents":12000,"truthAvailable":true},
+  {"jobId":"DL-002","supplierId":"SUP-002","invoiceNumber":"INV-1002","issueDate":"2026-08-02","dueDate":"2026-09-01","currency":"EUR","netCents":12500,"taxCents":2500,"grossCents":15000,"truthAvailable":true},
+  {"jobId":"DL-003","supplierId":"SUP-003","invoiceNumber":"INV-1003","issueDate":"2026-08-03","dueDate":"2026-09-02","currency":"EUR","netCents":8000,"taxCents":1600,"grossCents":9600,"truthAvailable":true},
+  {"jobId":"DL-004","supplierId":"SUP-004","invoiceNumber":"INV-1004","issueDate":"2026-08-04","dueDate":"2026-09-03","currency":"EUR","netCents":20000,"taxCents":4000,"grossCents":24000,"truthAvailable":true},
+  {"jobId":"DL-005","supplierId":"SUP-005","invoiceNumber":"INV-1005","issueDate":"2026-08-05","dueDate":"2026-09-04","currency":"EUR","netCents":7500,"taxCents":1500,"grossCents":9000,"truthAvailable":true},
+  {"jobId":"DL-006","supplierId":"SUP-006","invoiceNumber":"INV-1006","issueDate":"2026-08-06","dueDate":"2026-09-05","currency":"EUR","netCents":30000,"taxCents":6000,"grossCents":36000,"truthAvailable":true},
+  {"jobId":"DL-007","supplierId":"SUP-007","invoiceNumber":"INV-1007","issueDate":"2026-08-07","dueDate":"2026-09-06","currency":"EUR","netCents":9400,"taxCents":1880,"grossCents":11280,"truthAvailable":true},
+  {"jobId":"DL-008","supplierId":"SUP-008","invoiceNumber":"INV-1008","issueDate":"2026-08-08","dueDate":"2026-09-07","currency":"EUR","netCents":15000,"taxCents":3000,"grossCents":18000,"truthAvailable":true},
+  {"jobId":"DL-009","supplierId":"SUP-009","invoiceNumber":"INV-1009","issueDate":"2026-08-09","dueDate":"2026-09-08","currency":"EUR","netCents":4300,"taxCents":860,"grossCents":5160,"truthAvailable":true},
+  {"jobId":"DL-010","supplierId":"SUP-010","invoiceNumber":"INV-1010","issueDate":"2026-08-10","dueDate":"2026-09-09","currency":"EUR","netCents":50000,"taxCents":10000,"grossCents":60000,"truthAvailable":true},
+  {"jobId":"DL-011","supplierId":"SUP-011","invoiceNumber":"INV-1011","issueDate":"2026-08-11","dueDate":"2026-09-10","currency":"EUR","netCents":11000,"taxCents":2200,"grossCents":13200,"truthAvailable":true},
+  {"jobId":"DL-012","supplierId":"SUP-012","invoiceNumber":"INV-1012","issueDate":"2026-08-12","dueDate":"2026-09-11","currency":"EUR","netCents":6750,"taxCents":1350,"grossCents":8100,"truthAvailable":true},
+  {"jobId":"DL-013","supplierId":"SUP-013","invoiceNumber":"INV-1013","issueDate":"2026-08-13","dueDate":"2026-09-12","currency":"EUR","netCents":25000,"taxCents":5000,"grossCents":30000,"truthAvailable":true},
+  {"jobId":"DL-014","supplierId":"SUP-014","invoiceNumber":"INV-1014","issueDate":"2026-08-14","dueDate":"2026-09-13","currency":"EUR","netCents":13300,"taxCents":2660,"grossCents":15960,"truthAvailable":true},
+  {"jobId":"DL-015","supplierId":"SUP-015","invoiceNumber":"INV-1015","issueDate":"2026-08-15","dueDate":"2026-09-14","currency":"EUR","netCents":37000,"taxCents":7400,"grossCents":44400,"truthAvailable":true},
+  {"jobId":"DL-016","supplierId":"SUP-016","invoiceNumber":"INV-1016","issueDate":"2026-08-16","dueDate":"2026-09-15","currency":"EUR","netCents":9900,"taxCents":1980,"grossCents":11880,"truthAvailable":true},
+  {"jobId":"DL-017","supplierId":"SUP-017","invoiceNumber":"INV-1017","issueDate":"2026-08-17","dueDate":"2026-09-16","currency":"EUR","netCents":22200,"taxCents":4440,"grossCents":26640,"truthAvailable":true},
+  {"jobId":"DL-018","supplierId":"SUP-018","invoiceNumber":"INV-1018","issueDate":"2026-08-18","dueDate":"2026-09-17","currency":"EUR","netCents":98000,"taxCents":19600,"grossCents":117600,"truthAvailable":true},
+  {"jobId":"DL-019","supplierId":"SUP-019","invoiceNumber":"INV-1019","issueDate":"2026-08-19","dueDate":"2026-09-18","currency":"EUR","netCents":16000,"taxCents":3200,"grossCents":19200,"truthAvailable":true},
+  {"jobId":"DL-020","supplierId":"SUP-020","invoiceNumber":"INV-1020","issueDate":"2026-08-20","dueDate":"2026-09-19","currency":"EUR","netCents":28000,"taxCents":5600,"grossCents":33600,"truthAvailable":true}
+]

@@ -1,0 +1,25 @@
+{
+  "name": "doneledger",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "tsx --test test/*.test.ts",
+    "demo": "tsx src/index.ts --fixture",
+    "profiles:save": "node --env-file=.env --import tsx scripts/save-profiles.ts",
+    "canary": "node --env-file=.env --import tsx scripts/canary.ts",
+    "live": "node --env-file=.env --import tsx src/index.ts --live"
+  },
+  "dependencies": {
+    "@solarisdk/browser": "0.1.2",
+    "@solarisdk/sdk": "0.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "4.23.13",
+    "typescript": "^5.7.2"
+  }
+}

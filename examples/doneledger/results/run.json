@@ -1,0 +1,280 @@
+{
+  "runId": "86775a9b-2935-40b3-a531-25cf1dbb8e4b",
+  "mode": "live",
+  "synthetic": true,
+  "generatedAt": "2026-09-01T16:06:14.070Z",
+  "manifestHash": "e3cf4c3dfeb04debc937f2357cd7a0102f4001fafc56f8e2cdfe46864f71c69c",
+  "exportHash": "4e83b424b0d32a708e92571cc4e298d970e6708eac6fde003bb574e25cdbc2c7",
+  "summary": {
+    "claimed": 20,
+    "verified": 17,
+    "exceptions": 3,
+    "unknown": 0
+  },
+  "items": [
+    {
+      "jobId": "DL-001",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 120,
+      "observedTotal": 120,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-1"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-002",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 150,
+      "observedTotal": 150,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-5"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-003",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 96,
+      "observedTotal": 96,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-6"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-004",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 240,
+      "observedTotal": 240,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-7"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-005",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 90,
+      "observedTotal": 90,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-8"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-006",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 360,
+      "observedTotal": 360,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-9"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-007",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 112.8,
+      "observedTotal": 112.8,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-10"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-008",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 180,
+      "observedTotal": 180,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-11"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-009",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 51.6,
+      "observedTotal": 51.6,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-12"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-010",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 600,
+      "observedTotal": 600,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-13"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-011",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 132,
+      "observedTotal": 132,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-14"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-012",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 81,
+      "observedTotal": 81,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-15"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-013",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 300,
+      "observedTotal": 300,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-16"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-014",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 159.6,
+      "observedTotal": 159.6,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-17"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-015",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 444,
+      "observedTotal": 444,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-18"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-016",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 118.8,
+      "observedTotal": 118.8,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-19"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-017",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 266.4,
+      "observedTotal": 266.4,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-20"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-018",
+      "status": "exception",
+      "reasonCode": "TAX_MISMATCH",
+      "expectedTotal": 1176,
+      "observedTotal": 1014,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-21"
+      ],
+      "differences": [
+        {
+          "field": "netCents",
+          "expected": 98000,
+          "observed": 84500
+        },
+        {
+          "field": "taxCents",
+          "expected": 19600,
+          "observed": 16900
+        },
+        {
+          "field": "grossCents",
+          "expected": 117600,
+          "observed": 101400
+        }
+      ]
+    },
+    {
+      "jobId": "DL-019",
+      "status": "exception",
+      "reasonCode": "DUPLICATE_RECORD",
+      "expectedTotal": 192,
+      "observedTotal": 192,
+      "currency": "EUR",
+      "recordIds": [
+        "DOL-23",
+        "DOL-4"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-020",
+      "status": "exception",
+      "reasonCode": "RECORD_MISSING",
+      "expectedTotal": 336,
+      "currency": "EUR",
+      "recordIds": [],
+      "differences": []
+    }
+  ],
+  "permissionEvidence": {
+    "workerCannotValidate": true,
+    "workerCannotPay": true,
+    "verifierCannotMutate": true
+  },
+  "lifecycle": {
+    "browsersReleased": true,
+    "sandboxKilled": true
+  },
+  "disclaimer": "Synthetic live run; not production finance evidence."
+}

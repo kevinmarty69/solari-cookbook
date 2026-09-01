@@ -1,0 +1,28 @@
+{
+  "state": "fresh",
+  "runId": "fixture-canonical",
+  "observedAt": "2026-09-01T00:00:00.000Z",
+  "exportHash": "418898004b69b3737323b1168f8dc167062ab0acff8029765e500bf53ca3cfab",
+  "records": [
+    {"jobId":"DL-001","recordId":"ERP-001","supplierId":"SUP-001","invoiceNumber":"INV-1001","issueDate":"2026-08-01","dueDate":"2026-08-31","currency":"EUR","netCents":10000,"taxCents":2000,"grossCents":12000,"state":"draft"},
+    {"jobId":"DL-002","recordId":"ERP-002","supplierId":"SUP-002","invoiceNumber":"INV-1002","issueDate":"2026-08-02","dueDate":"2026-09-01","currency":"EUR","netCents":12500,"taxCents":2500,"grossCents":15000,"state":"draft"},
+    {"jobId":"DL-003","recordId":"ERP-003","supplierId":"SUP-003","invoiceNumber":"INV-1003","issueDate":"2026-08-03","dueDate":"2026-09-02","currency":"EUR","netCents":8000,"taxCents":1600,"grossCents":9600,"state":"draft"},
+    {"jobId":"DL-004","recordId":"ERP-004","supplierId":"SUP-004","invoiceNumber":"INV-1004","issueDate":"2026-08-04","dueDate":"2026-09-03","currency":"EUR","netCents":20000,"taxCents":4000,"grossCents":24000,"state":"draft"},
+    {"jobId":"DL-005","recordId":"ERP-005","supplierId":"SUP-005","invoiceNumber":"INV-1005","issueDate":"2026-08-05","dueDate":"2026-09-04","currency":"EUR","netCents":7500,"taxCents":1500,"grossCents":9000,"state":"draft"},
+    {"jobId":"DL-006","recordId":"ERP-006","supplierId":"SUP-006","invoiceNumber":"INV-1006","issueDate":"2026-08-06","dueDate":"2026-09-05","currency":"EUR","netCents":30000,"taxCents":6000,"grossCents":36000,"state":"draft"},
+    {"jobId":"DL-007","recordId":"ERP-007","supplierId":"SUP-007","invoiceNumber":"INV-1007","issueDate":"2026-08-07","dueDate":"2026-09-06","currency":"EUR","netCents":9400,"taxCents":1880,"grossCents":11280,"state":"draft"},
+    {"jobId":"DL-008","recordId":"ERP-008","supplierId":"SUP-008","invoiceNumber":"INV-1008","issueDate":"2026-08-08","dueDate":"2026-09-07","currency":"EUR","netCents":15000,"taxCents":3000,"grossCents":18000,"state":"draft"},
+    {"jobId":"DL-009","recordId":"ERP-009","supplierId":"SUP-009","invoiceNumber":"INV-1009","issueDate":"2026-08-09","dueDate":"2026-09-08","currency":"EUR","netCents":4300,"taxCents":860,"grossCents":5160,"state":"draft"},
+    {"jobId":"DL-010","recordId":"ERP-010","supplierId":"SUP-010","invoiceNumber":"INV-1010","issueDate":"2026-08-10","dueDate":"2026-09-09","currency":"EUR","netCents":50000,"taxCents":10000,"grossCents":60000,"state":"draft"},
+    {"jobId":"DL-011","recordId":"ERP-011","supplierId":"SUP-011","invoiceNumber":"INV-1011","issueDate":"2026-08-11","dueDate":"2026-09-10","currency":"EUR","netCents":11000,"taxCents":2200,"grossCents":13200,"state":"draft"},
+    {"jobId":"DL-012","recordId":"ERP-012","supplierId":"SUP-012","invoiceNumber":"INV-1012","issueDate":"2026-08-12","dueDate":"2026-09-11","currency":"EUR","netCents":6750,"taxCents":1350,"grossCents":8100,"state":"draft"},
+    {"jobId":"DL-013","recordId":"ERP-013","supplierId":"SUP-013","invoiceNumber":"INV-1013","issueDate":"2026-08-13","dueDate":"2026-09-12","currency":"EUR","netCents":25000,"taxCents":5000,"grossCents":30000,"state":"draft"},
+    {"jobId":"DL-014","recordId":"ERP-014","supplierId":"SUP-014","invoiceNumber":"INV-1014","issueDate":"2026-08-14","dueDate":"2026-09-13","currency":"EUR","netCents":13300,"taxCents":2660,"grossCents":15960,"state":"draft"},
+    {"jobId":"DL-015","recordId":"ERP-015","supplierId":"SUP-015","invoiceNumber":"INV-1015","issueDate":"2026-08-15","dueDate":"2026-09-14","currency":"EUR","netCents":37000,"taxCents":7400,"grossCents":44400,"state":"draft"},
+    {"jobId":"DL-016","recordId":"ERP-016","supplierId":"SUP-016","invoiceNumber":"INV-1016","issueDate":"2026-08-16","dueDate":"2026-09-15","currency":"EUR","netCents":9900,"taxCents":1980,"grossCents":11880,"state":"draft"},
+    {"jobId":"DL-017","recordId":"ERP-017","supplierId":"SUP-017","invoiceNumber":"INV-1017","issueDate":"2026-08-17","dueDate":"2026-09-16","currency":"EUR","netCents":22200,"taxCents":4440,"grossCents":26640,"state":"draft"},
+    {"jobId":"DL-018","recordId":"ERP-018","supplierId":"SUP-018","invoiceNumber":"INV-1018","issueDate":"2026-08-18","dueDate":"2026-09-17","currency":"EUR","netCents":98000,"taxCents":16900,"grossCents":117600,"state":"draft"},
+    {"jobId":"DL-019","recordId":"ERP-019-A","supplierId":"SUP-019","invoiceNumber":"INV-1019","issueDate":"2026-08-19","dueDate":"2026-09-18","currency":"EUR","netCents":16000,"taxCents":3200,"grossCents":19200,"state":"draft"},
+    {"jobId":"DL-019","recordId":"ERP-019-B","supplierId":"SUP-019","invoiceNumber":"INV-1019","issueDate":"2026-08-19","dueDate":"2026-09-18","currency":"EUR","netCents":16000,"taxCents":3200,"grossCents":19200,"state":"draft"}
+  ]
+}
