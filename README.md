@@ -37,7 +37,7 @@ past. Copy one into your project and change the parts you care about.
 
 | Example | Language | What it shows |
 | --- | --- | --- |
-| [doneledger](examples/doneledger) | TypeScript | A deterministic local fixture plus a gated Solari/Dolibarr live-run protocol |
+| [doneledger](examples/doneledger) | TypeScript | Independent invoice verification with a committed synthetic Solari/Dolibarr live run |
 
 ## Running an example
 
