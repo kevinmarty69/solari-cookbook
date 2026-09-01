@@ -526,8 +526,8 @@ export async function runReadOnlyLive(
   const baseUrl = safeDolibarrUrl(connection.baseUrl)
   await assertPublicDolibarrDns(baseUrl)
   const runId = options.runId ?? randomUUID()
-  const browsers = new Solari({ apiKey, maxAttempts: 1 })
-  const compute = new SolariClient({ apiKey })
+  const browsers = new Solari({ apiKey, maxAttempts: 1, timeoutMs: 15_000 })
+  const compute = new SolariClient({ apiKey, callTimeoutMs: 30_000 })
   let browser: BrowserSession | undefined
   let sandbox: Sandbox | undefined
   let observed: ObservedBatch | undefined
@@ -539,10 +539,15 @@ export async function runReadOnlyLive(
     browser = await browsers.launch({ proxy: "off", recording: false, retries: 0 })
     const page = await browser.newPage()
     page.setDefaultTimeout(8_000)
-    const go = (path: string) => page.goto(new URL(path, baseUrl).href, { waitUntil: "domcontentloaded", timeout: 10_000 })
+    const go = async (path: string) => {
+      const target = new URL(path, baseUrl)
+      if (target.origin !== baseUrl.origin) throw new Error("Dolibarr navigation left the allowed origin")
+      await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 10_000 })
+      if (new URL(page.url()).origin !== baseUrl.origin) throw new Error("Dolibarr redirected outside the allowed origin")
+    }
     const denied = async () => /access denied|accès refusé/i.test(await page.locator("body").innerText())
 
-    await page.goto(baseUrl.href, { waitUntil: "domcontentloaded", timeout: 10_000 })
+    await go(baseUrl.href)
     if (await page.locator("#username").count()) {
       await page.locator("#username").fill(connection.username)
       await page.locator("#password").fill(connection.password)
@@ -550,6 +555,7 @@ export async function runReadOnlyLive(
         page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
         page.locator('button[type="submit"], input[type="submit"]').click(),
       ])
+      if (new URL(page.url()).origin !== baseUrl.origin) throw new Error("Dolibarr login redirected outside the allowed origin")
     }
     if (await page.locator("#username").count()) throw new Error("Dolibarr login failed")
 

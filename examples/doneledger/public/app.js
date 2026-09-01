@@ -1,350 +1,126 @@
-const FILTERS = new Set(["all", "exceptions", "verified", "unknown"])
-const STATUSES = new Set(["verified", "exception", "unknown"])
-const REQUIRED_HEADERS = ["job_id", "supplier_id", "invoice_number", "issue_date", "due_date", "currency", "net", "tax", "gross"]
-const HASH = /^[a-f0-9]{64}$/i
-const $ = (id) => document.getElementById(id)
-
-const fallbackItems = Array.from({ length: 20 }, (_, index) => {
-  const number = index + 1
-  const exceptions = {
-    18: { reasonCode: "TAX_MISMATCH", expectedTotal: 1176, observedTotal: 1014, differences: [{ field: "grossCents", expected: 117600, observed: 101400 }] },
-    19: { reasonCode: "DUPLICATE_RECORD", expectedTotal: 192, observedTotal: 192, recordIds: ["ERP-019-A", "ERP-019-B"] },
-    20: { reasonCode: "RECORD_MISSING", expectedTotal: 336, observedTotal: null, recordIds: [] },
-  }
-  const exception = exceptions[number]
-  return { jobId: `DL-${String(number).padStart(3, "0")}`, status: exception ? "exception" : "verified", reasonCode: exception?.reasonCode ?? "EXACT_MATCH", expectedTotal: exception?.expectedTotal ?? 100 + index * 37.5, observedTotal: exception ? exception.observedTotal : 100 + index * 37.5, currency: "EUR", recordIds: exception?.recordIds ?? [`ERP-${String(number).padStart(3, "0")}`], differences: exception?.differences ?? [] }
-})
-
-const fallbackRun = {
-  runId: "bundled-fallback", mode: "fixture", synthetic: true, generatedAt: "2026-09-01T00:00:00.000Z", manifestHash: null, exportHash: null,
-  summary: { claimed: 20, verified: 17, exceptions: 3, unknown: 0 }, items: fallbackItems, permissionEvidence: null, lifecycle: null,
-  disclaimer: "Bundled synthetic fixture; not production finance evidence.",
-}
-
-const state = { run: fallbackRun, filter: "exceptions", selectedJob: "DL-018", source: "fixture", csv: "", csvRows: [], fileName: "", step: 1, runs: [], publicAccess: false, currentShared: false, progressTimer: null, startedAt: 0 }
+const API = { signup:"/api/auth/signup", login:"/api/auth/login", logout:"/api/auth/logout", me:"/api/me", runs:"/api/runs", demo:"/api/demo-runs", publicSample:"/api/public-sample" }
+const REQUIRED_HEADERS = ["job_id","supplier_id","invoice_number","issue_date","due_date","currency","net","tax","gross"]
+const FILTERS = new Set(["all","exceptions","verified","unknown"]), STATUSES = new Set(["verified","exception","unknown"]), HASH = /^[a-f0-9]{64}$/i
+const $ = id => document.getElementById(id)
+const state = { user:null, runs:[], run:null, filter:"exceptions", selectedJob:null, publicAccess:false, currentShared:false, csv:"", csvRows:[], fileName:"", step:1, timer:null, startedAt:0 }
 const sampleCsv = `job_id,supplier_id,invoice_number,issue_date,due_date,currency,net,tax,gross
 DL-001,SUP-001,INV-1001,2026-08-01,2026-08-31,EUR,100.00,20.00,120.00
 DL-002,SUP-002,INV-1002,2026-08-02,2026-09-01,EUR,180.00,36.00,216.00
 DL-003,SUP-003,INV-1003,2026-08-03,2026-09-02,EUR,240.00,48.00,288.00`
 
-function record(value) { return value !== null && typeof value === "object" && !Array.isArray(value) }
-function requiredText(value, name) { if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is missing`); return value.trim() }
-function optionalAmount(value, name) { if (value === undefined || value === null) return null; if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${name} is invalid`); return value }
-function text(value) { return value === undefined || value === null || value === "" ? "Not recorded" : String(value) }
-function shortHash(value) { return value ? `${value.slice(0, 12)}…${value.slice(-8)}` : "Not recorded" }
-function element(tag, options = {}) { const node = document.createElement(tag); if (options.className) node.className = options.className; if (options.text !== undefined) node.textContent = options.text; return node }
-function badge(status) { return element("span", { className: `status-badge ${status}`, text: status }) }
-function formatAmount(value, currency) { if (value === null || value === undefined) return "Not recorded"; try { return new Intl.NumberFormat("en", currency ? { style: "currency", currency } : { maximumFractionDigits: 2 }).format(value) } catch { return `${value.toFixed(2)} ${currency ?? ""}`.trim() } }
-function formatDate(value) { if (!value || Number.isNaN(Date.parse(value))) return "Not recorded"; return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) }
+function record(value){return value!==null&&typeof value==="object"&&!Array.isArray(value)}
+function requiredText(value,name){if(typeof value!=="string"||!value.trim())throw new Error(`${name} is missing`);return value.trim()}
+function element(tag,{className,text}={}){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node}
+function shortHash(value){return value?`${value.slice(0,10)}…${value.slice(-7)}`:"Not Recorded"}
+function formatDate(value){if(!value||Number.isNaN(Date.parse(value)))return"Not Recorded";return new Intl.DateTimeFormat("en",{dateStyle:"medium",timeStyle:"short"}).format(new Date(value))}
+function formatAmount(value,currency){if(value==null)return"Not Recorded";try{return new Intl.NumberFormat("en",currency?{style:"currency",currency}:{maximumFractionDigits:2}).format(value)}catch{return`${value} ${currency||""}`.trim()}}
+function badge(status){return element("span",{className:`status-badge ${status}`,text:status})}
 
-function normalizeDifference(value, index) {
-  if (!record(value)) throw new Error(`difference ${index + 1} is invalid`)
-  const expected = value.expected, observed = value.observed
-  if (!["string", "number"].includes(typeof expected) || !["string", "number"].includes(typeof observed)) throw new Error(`difference ${index + 1} values are invalid`)
-  return { field: requiredText(value.field, `difference ${index + 1} field`), expected, observed }
+async function request(path,{body,...options}={}){
+  const response=await fetch(path,{credentials:"same-origin",...options,headers:{...(body!==undefined?{"Content-Type":"application/json"}:{}),...(options.headers||{})},body:body===undefined?undefined:JSON.stringify(body)})
+  if(response.status===204)return null
+  const payload=await response.json().catch(()=>({}))
+  if(!response.ok)throw new Error(payload.error||`Request failed (${response.status})`)
+  return payload
 }
 
-function normalizeItem(value, index) {
-  if (!record(value)) throw new Error(`item ${index + 1} is invalid`)
-  const status = requiredText(value.status ?? value.state, `item ${index + 1} status`).toLowerCase()
-  if (!STATUSES.has(status)) throw new Error(`item ${index + 1} has an unknown status`)
-  const recordIds = value.recordIds ?? []
-  const differences = value.differences ?? []
-  if (!Array.isArray(recordIds) || !Array.isArray(differences)) throw new Error(`item ${index + 1} evidence is invalid`)
-  const reasonCode = requiredText(value.reasonCode, `item ${index + 1} reasonCode`)
-  if (status === "verified" && (reasonCode !== "EXACT_MATCH" || differences.length || !recordIds.length)) throw new Error(`item ${index + 1} does not prove a verified verdict`)
-  if (status !== "verified" && reasonCode === "EXACT_MATCH") throw new Error(`item ${index + 1} contradicts its verdict`)
-  return { jobId: requiredText(value.jobId, `item ${index + 1} jobId`), status, reasonCode, expectedTotal: optionalAmount(value.expectedTotal, "expectedTotal"), observedTotal: optionalAmount(value.observedTotal, "observedTotal"), currency: typeof value.currency === "string" ? value.currency : null, recordIds: recordIds.map(String), differences: differences.map(normalizeDifference) }
+function normalizeRun(raw){
+  if(!record(raw)||!Array.isArray(raw.items)||!record(raw.summary))throw new Error("Run artifact is incomplete")
+  const items=raw.items.map((value,index)=>{
+    if(!record(value))throw new Error(`Item ${index+1} is invalid`)
+    const status=requiredText(value.status??value.state,"status").toLowerCase(),recordIds=value.recordIds??[],differences=value.differences??[]
+    if(!STATUSES.has(status)||!Array.isArray(recordIds)||!Array.isArray(differences))throw new Error(`Item ${index+1} evidence is invalid`)
+    const reasonCode=requiredText(value.reasonCode,"reasonCode")
+    if(status==="verified"&&(reasonCode!=="EXACT_MATCH"||differences.length||!recordIds.length))throw new Error(`Item ${index+1} does not prove a verified verdict`)
+    if(status!=="verified"&&reasonCode==="EXACT_MATCH")throw new Error(`Item ${index+1} contradicts its verdict`)
+    return{jobId:requiredText(value.jobId,"jobId"),status,reasonCode,expectedTotal:value.expectedTotal??null,observedTotal:value.observedTotal??null,currency:value.currency??null,recordIds:recordIds.map(String),differences:differences.map(d=>({field:String(d.field),expected:d.expected,observed:d.observed}))}
+  })
+  if(new Set(items.map(item=>item.jobId)).size!==items.length)throw new Error("Job IDs are not unique")
+  const summary={claimed:items.length,verified:items.filter(i=>i.status==="verified").length,exceptions:items.filter(i=>i.status==="exception").length,unknown:items.filter(i=>i.status==="unknown").length}
+  for(const [key,value]of Object.entries(summary))if(raw.summary[key]!==value)throw new Error(`Summary ${key} does not match evidence`)
+  if(raw.manifestHash!=null&&!HASH.test(raw.manifestHash)||raw.exportHash!=null&&!HASH.test(raw.exportHash))throw new Error("Evidence fingerprint is invalid")
+  if(raw.mode==="live"&&!(raw.authorityModel==="read_only_verifier"&&raw.manifestHash&&raw.exportHash&&raw.permissionEvidence?.verifierCannotMutate===true&&raw.permissionEvidence?.verifierCannotPay===true&&raw.lifecycle?.browsersReleased===true&&raw.lifecycle?.sandboxKilled===true))throw new Error("Live artifact is missing a proof gate")
+  const generatedAt=requiredText(raw.generatedAt,"generatedAt");if(Number.isNaN(Date.parse(generatedAt)))throw new Error("Run timestamp is invalid")
+  return{...raw,runId:requiredText(raw.runId,"runId"),summary,items,generatedAt}
 }
 
-function normalizeRun(raw) {
-  if (!record(raw) || !Array.isArray(raw.items) || !record(raw.summary)) throw new Error("run artifact is incomplete")
-  const items = raw.items.map(normalizeItem)
-  if (new Set(items.map(({ jobId }) => jobId)).size !== items.length) throw new Error("job IDs are not unique")
-  const summary = { claimed: items.length, verified: items.filter(({ status }) => status === "verified").length, exceptions: items.filter(({ status }) => status === "exception").length, unknown: items.filter(({ status }) => status === "unknown").length }
-  for (const [key, count] of Object.entries(summary)) if (raw.summary[key] !== count) throw new Error(`summary.${key} does not match evidence`)
-  if (raw.manifestHash != null && !HASH.test(raw.manifestHash)) throw new Error("manifest hash is invalid")
-  if (raw.exportHash != null && !HASH.test(raw.exportHash)) throw new Error("export hash is invalid")
-  const generatedAt = requiredText(raw.generatedAt, "generatedAt")
-  if (Number.isNaN(Date.parse(generatedAt))) throw new Error("generatedAt is invalid")
-  const liveGates = raw.mode !== "live" || (raw.authorityModel === "read_only_verifier" && raw.manifestHash && raw.exportHash && raw.permissionEvidence?.verifierCannotMutate === true && raw.permissionEvidence?.verifierCannotPay === true && raw.lifecycle?.browsersReleased === true && raw.lifecycle?.sandboxKilled === true)
-  if (!liveGates) throw new Error("live artifact is missing a proof gate")
-  return { ...raw, runId: requiredText(raw.runId, "runId"), generatedAt, synthetic: raw.synthetic === true, summary, items, permissionEvidence: record(raw.permissionEvidence) ? raw.permissionEvidence : null, lifecycle: record(raw.lifecycle) ? raw.lifecycle : null, disclaimer: typeof raw.disclaimer === "string" ? raw.disclaimer : "Verification evidence; not payment authorization." }
+async function refreshSession(){try{const body=await request(API.me);state.user=body.user??null}catch{state.user=null}renderIdentity();return state.user}
+function renderIdentity(){if(!state.user)return;const name=state.user.name||state.user.email?.split("@")[0]||"Workspace",email=state.user.email||"";$("user-name").textContent=name;$("user-email").textContent=email;$("user-initials").textContent=name.split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase();$("dashboard-name").textContent=name.split(" ")[0];$("settings-name").textContent=name;$("settings-email").textContent=email;$("day-period").textContent=new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}
+
+const mobileNavigation=matchMedia("(max-width: 760px)")
+function setNavigation(open,restoreFocus=false){const visible=Boolean(open&&mobileNavigation.matches&&!$("app-shell").hidden);document.body.classList.toggle("nav-open",visible);$("app-sidebar").inert=mobileNavigation.matches&&!visible;$("app-sidebar").setAttribute("aria-hidden",String(mobileNavigation.matches&&!visible));$("mobile-menu").setAttribute("aria-expanded",String(visible));$("mobile-menu").setAttribute("aria-label",visible?"Close navigation":"Open navigation");if(visible)$("app-sidebar").querySelector("a").focus();else if(restoreFocus)$("mobile-menu").focus()}
+function showPublic(id,{report=false,auth=false}={}){setNavigation(false);$("app-shell").hidden=true;document.querySelectorAll(".public-view").forEach(v=>v.hidden=v.id!==id);$("marketing-header").hidden=report||auth;$("marketing-footer").hidden=report||auth;window.scrollTo({top:0,behavior:"auto"})}
+function showApp(id,label){if(!state.user){location.hash="/login";return}document.querySelectorAll(".public-view").forEach(v=>v.hidden=true);$("marketing-header").hidden=true;$("marketing-footer").hidden=true;$("app-shell").hidden=false;document.querySelectorAll(".app-page").forEach(v=>v.hidden=v.id!==id);$("app-breadcrumb").textContent=label;document.querySelectorAll("[data-app-nav]").forEach(a=>a.classList.toggle("active",a.dataset.appNav===({"dashboard-page":"dashboard","wizard-page":"new","runs-page":"runs","settings-page":"settings"}[id])));setNavigation(false);window.scrollTo({top:0,behavior:"auto"})}
+
+async function route(){
+  if(/^\/report\/[0-9a-f-]+$/i.test(location.pathname))return loadPublicReport()
+  const path=location.hash.slice(1)||"/"
+  if(path==="/")return showPublic("landing-view")
+  if(path==="/login"||path==="/signup"){showPublic("auth-view",{auth:true});$("login-panel").hidden=path!=="/login";$("signup-panel").hidden=path!=="/signup";return}
+  if(!state.user){location.hash="/login";return}
+  if(path==="/app"){showApp("dashboard-page","Overview");return loadDashboard()}
+  if(path==="/new"){showApp("wizard-page","New Verification");return setStep(state.step)}
+  if(path==="/runs"){showApp("runs-page","Runs");return loadRuns()}
+  if(path==="/settings")return showApp("settings-page","Settings")
+  const match=path.match(/^\/runs\/([0-9a-f-]+)$/i);if(match)return loadOwnedReport(match[1])
+  location.hash="/app"
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(path, { credentials: "same-origin", ...options, headers: { "Content-Type": "application/json", ...(options.headers ?? {}) } })
-  if (response.status === 204) return null
-  const body = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`)
-  return body
+async function submitAuth(kind,form,errorNode){
+  errorNode.textContent="";const values=Object.fromEntries(new FormData(form));const button=form.querySelector("button[type=submit]");button.disabled=true;button.textContent=kind==="signup"?"Creating Workspace…":"Logging In…"
+  try{const body=await request(API[kind],{method:"POST",body:values});state.user=body.user??null;if(!state.user)await refreshSession();form.reset();renderIdentity();if(sessionStorage.getItem("doneledger_pending_demo")){sessionStorage.removeItem("doneledger_pending_demo");location.hash="/app";setTimeout(createDemo,0)}else location.hash="/app"}catch(error){errorNode.textContent=error.message;form.querySelector("input:invalid")?.focus()}finally{button.disabled=false;button.textContent=kind==="signup"?"Create Workspace":"Log In"}
+}
+async function logout(){try{await request(API.logout,{method:"POST",body:{}})}finally{state.user=null;state.runs=[];location.hash="/"}}
+
+async function loadRuns(){$("runs-error").textContent="";$("dashboard-error").textContent="";try{const body=await request(API.runs);state.runs=body.runs||[];renderRuns();return true}catch(error){state.runs=[];renderRuns();$("empty-history").hidden=true;$("runs-error").textContent=error.message;$("dashboard-error").textContent=`Evidence history unavailable: ${error.message}`;return false}}
+function runStatus(run){return run.summary?.unknown?"unknown":run.summary?.exceptions?"exception":"verified"}
+function renderRuns(){const query=$("run-search").value.trim().toLowerCase(),runs=state.runs.filter(r=>r.runId.toLowerCase().includes(query));$("runs-body").replaceChildren(...runs.map(run=>{const tr=element("tr"),id=element("td"),link=element("a",{text:run.runId.slice(0,12)});link.href=`#/runs/${run.runId}`;id.append(link);const status=element("td");status.append(badge(runStatus(run)));const sharing=element("td",{text:run.shared?"Public Link Active":"Private"}),action=element("td"),open=element("a",{text:"Open →"});open.href=`#/runs/${run.runId}`;action.append(open);tr.append(id,element("td",{text:formatDate(run.generatedAt)}),element("td",{text:`${run.summary?.verified||0}/${run.summary?.claimed||0} verified`}),status,sharing,action);return tr}));$("empty-history").hidden=runs.length>0;$("runs-body").closest(".table-scroll").hidden=runs.length===0}
+async function loadDashboard(){if(!await loadRuns()){for(const id of["stat-runs","stat-verified","stat-exceptions","stat-unknown"])$(id).textContent="—";$("recent-empty").hidden=true;$("recent-runs").replaceChildren();return}const total=(key)=>state.runs.reduce((sum,r)=>sum+(r.summary?.[key]||0),0);$("stat-runs").textContent=state.runs.length;$("stat-verified").textContent=total("verified");$("stat-exceptions").textContent=total("exceptions");$("stat-unknown").textContent=total("unknown");$("recent-empty").hidden=state.runs.length>0;$("recent-runs").replaceChildren(...state.runs.slice(0,4).map(run=>{const a=element("a");a.href=`#/runs/${run.runId}`;a.append(element("span",{text:run.runId.slice(0,10)}),element("strong",{text:`${run.summary.verified}/${run.summary.claimed} verified`}),badge(runStatus(run)));return a}));const sample=state.runs.some(run=>run.mode!=="live"),live=state.runs.some(run=>run.mode==="live");for(const[type,done,fallback]of[["sample",sample,"2"],["live",live,"3"]]){const node=document.querySelector(`[data-onboarding="${type}"]`);node.classList.toggle("done",done);node.firstElementChild.textContent=done?"✓":fallback;node.lastElementChild.hidden=done}$("onboarding-score").textContent=`${1+Number(sample)+Number(live)}/3`}
+
+function parseCsv(source){const rows=[];let row=[],field="",quoted=false;for(let i=0;i<source.length;i++){const c=source[i];if(quoted&&c==='"'&&source[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=!quoted;else if(c===","&&!quoted){row.push(field.trim());field=""}else if((c==="\n"||c==="\r")&&!quoted){if(c==="\r"&&source[i+1]==="\n")i++;row.push(field.trim());if(row.some(Boolean))rows.push(row);row=[];field=""}else field+=c}row.push(field.trim());if(row.some(Boolean))rows.push(row);if(quoted)throw new Error("CSV contains an unclosed quote");if(rows.length<2)throw new Error("CSV needs a header and at least 1 row");const headers=rows[0].map(v=>v.toLowerCase()),missing=REQUIRED_HEADERS.filter(h=>!headers.includes(h));if(missing.length)throw new Error(`Missing columns: ${missing.join(", ")}`);if(rows.length-1>25)throw new Error("CSV is limited to 25 rows");rows.slice(1).forEach((values,index)=>{if(values.length!==headers.length||values.some(v=>!v))throw new Error(`Row ${index+2} has a missing or extra value`)});return{headers,rows:rows.slice(1)}}
+function loadCsv(source,name){if(!name.toLowerCase().endsWith(".csv"))throw new Error("Choose a .csv file");if(new Blob([source]).size>2*1024*1024)throw new Error("CSV must be 2 MB or smaller");const parsed=parseCsv(source);state.csv=source;state.csvRows=parsed.rows;state.fileName=name;$("file-error").textContent="";$("file-name").textContent=name;$("row-count").textContent=`${parsed.rows.length} rows`;const header=element("tr");parsed.headers.forEach(v=>header.append(element("th",{text:v})));$("preview-head").replaceChildren(header);$("preview-body").replaceChildren(...parsed.rows.slice(0,5).map(values=>{const tr=element("tr");values.forEach(v=>tr.append(element("td",{text:v})));return tr}));$("import-preview").hidden=false}
+function clearCsv(){state.csv="";state.csvRows=[];state.fileName="";$("manifest-file").value="";$("import-preview").hidden=true}
+function setStep(step){state.step=step;document.querySelectorAll(".wizard-step").forEach(s=>s.hidden=Number(s.dataset.step)!==step);document.querySelectorAll("[data-step-indicator]").forEach(s=>{const n=Number(s.dataset.stepIndicator);s.classList.toggle("active",n===step);s.classList.toggle("complete",n<step)});const heading=document.querySelector(`.wizard-step[data-step="${step}"] h2`);heading?.setAttribute("tabindex","-1");heading?.focus({preventScroll:true})}
+function validateConnection(){const fields=[$("erp-url"),$("erp-username"),$("erp-password"),$("access-code")],invalid=fields.find(f=>!f.checkValidity());if(invalid){$("connection-error").textContent=invalid.validationMessage;invalid.focus();return false}try{const url=new URL($("erp-url").value);if(url.protocol!=="https:"||url.username||url.password||url.search||url.hash)throw new Error();$("connected-host").textContent=url.host;$("connection-proof").hidden=false;$("connection-error").textContent="";return true}catch{$("connection-error").textContent="Use a public HTTPS URL without credentials, query or fragment.";$("erp-url").focus();return false}}
+function prepareReview(){if(!validateConnection())return;$("review-file").textContent=state.fileName;$("review-rows").textContent=`${state.csvRows.length} expected rows`;$("review-host").textContent=new URL($("erp-url").value).host;setStep(3)}
+
+function showProgress(runId="allocating"){showApp("progress-page","Run in Progress");$("progress-actions").hidden=true;$("progress-run-id").textContent=runId;state.startedAt=Date.now();clearInterval(state.timer);document.querySelectorAll("[data-run-step]").forEach(n=>{n.className="";n.querySelector("em").textContent="Pending"});state.timer=setInterval(()=>$("progress-time").textContent=`${Math.floor((Date.now()-state.startedAt)/1000)}s`,1000);syncProgress("validate")}
+function syncProgress(step){const order=["validate","browser","compare","cleanup","report"],aliases={queued:"validate",validating:"validate",reading:"browser",browser:"browser",comparing:"compare",compare:"compare",cleanup:"cleanup",reporting:"report",report:"report"},active=aliases[String(step).toLowerCase()]||"browser",at=order.indexOf(active);order.forEach((key,index)=>{const node=document.querySelector(`[data-run-step="${key}"]`);node.className=index<at?"complete":index===at?"running":"";node.querySelector("em").textContent=index<at?"Passed":index===at?"Running":"Pending"});const percent=10+Math.max(0,at)*20;$("progress-fill").style.width=`${percent}%`;$("progress-fill").parentElement.setAttribute("aria-valuenow",percent);$("progress-label").textContent=document.querySelector(`[data-run-step="${active}"] strong`).textContent;$("progress-status").textContent=`${$("progress-label").textContent} is in progress.`}
+function finishProgress(run){clearInterval(state.timer);document.querySelectorAll("[data-run-step]").forEach(n=>{n.className="complete";n.querySelector("em").textContent="Passed"});$("progress-fill").style.width="100%";$("progress-fill").parentElement.setAttribute("aria-valuenow","100");$("progress-label").textContent="Verification Complete";$("progress-status").textContent=`${run.summary.verified} verified, ${run.summary.exceptions} exceptions.`}
+function failProgress(message){clearInterval(state.timer);const running=document.querySelector("[data-run-step].running");if(running){running.className="failed";running.querySelector("em").textContent="Failed"}$("progress-label").textContent="Verification Failed Safely";$("progress-status").textContent=`${message} No verdict was accepted.`;$("progress-actions").hidden=false}
+async function pollJob(id){for(;;){await new Promise(resolve=>setTimeout(resolve,1200));const{job}=await request(`/api/jobs/${encodeURIComponent(id)}`);syncProgress(job.step||job.status);if(job.status==="complete")return normalizeRun((await request(`/api/runs/${encodeURIComponent(id)}`)).run);if(job.status==="failed")throw new Error(job.error||"Live verification failed safely")}}
+async function createDemo(){
+  const publicDemo=!state.user,status=$("landing-status"),buttons=[...document.querySelectorAll(`[data-action="${publicDemo?"public-sample":"demo"}"]`)]
+  buttons.forEach(button=>button.disabled=true);if(publicDemo)status.textContent="Loading synthetic evidence…"
+  try{const{run}=publicDemo?await request(API.publicSample):await request(API.demo,{method:"POST",body:{}});state.run=normalizeRun(run);state.publicAccess=publicDemo;state.currentShared=false;status.textContent="";if(publicDemo)renderReport();else location.hash=`/runs/${state.run.runId}`}catch(error){status.textContent=error.message}finally{buttons.forEach(button=>button.disabled=false)}
+}
+async function submitRun(event){event.preventDefault();$("submit-error").textContent="";if(!$("scope-confirm").checked){$("submit-error").textContent="Confirm the read-only scope.";$("scope-confirm").focus();return}const body={csv:state.csv,dolibarr:{baseUrl:$("erp-url").value,username:$("erp-username").value,password:$("erp-password").value},accessCode:$("access-code").value};showProgress();try{const response=await request(API.runs,{method:"POST",body});$("erp-password").value="";$("access-code").value="";const run=response.job?await pollJob(response.job.runId):normalizeRun(response.run);finishProgress(run);setTimeout(()=>{location.hash=`/runs/${run.runId}`},350)}catch(error){$("erp-password").value="";$("access-code").value="";failProgress(error.message)}}
+
+async function loadOwnedReport(id){try{const[{run},history]=await Promise.all([request(`/api/runs/${encodeURIComponent(id)}`),request(API.runs)]);state.run=normalizeRun(run);state.publicAccess=false;state.currentShared=history.runs.some(r=>r.runId===id&&r.shared);renderReport()}catch(error){location.hash="/runs";$("runs-error").textContent=error.message}}
+async function loadPublicReport(){showPublic("report-view",{report:true});const id=location.pathname.split("/").pop(),token=location.hash.slice(1);try{if(!token)throw new Error("Share token is missing");state.run=normalizeRun((await request(`/api/reports/${encodeURIComponent(id)}/access`,{method:"POST",headers:{Authorization:`Bearer ${token}`},body:{}})).run);state.publicAccess=true;state.currentShared=true;renderReport()}catch(error){$("report-title").textContent="Report Unavailable";$("evidence-boundary").textContent=error.message}}
+function filteredItems(){if(state.filter==="all")return state.run.items;return state.run.items.filter(i=>i.status===(state.filter==="exceptions"?"exception":state.filter))}
+function setFilter(filter){state.filter=FILTERS.has(filter)?filter:"exceptions";const items=filteredItems();if(!items.some(i=>i.jobId===state.selectedJob))state.selectedJob=items[0]?.jobId||null;renderEvidence();$("results-announcement").textContent=`${items.length} results shown.`}
+function differencesNode(item){if(!item.differences.length)return element("p",{text:"No field-level difference recorded."});const list=element("div",{className:"difference-list"});item.differences.forEach(d=>{const row=element("div");row.append(element("strong",{text:d.field}),element("span",{text:String(d.expected)}),element("i",{text:"→"}),element("span",{text:String(d.observed)}));list.append(row)});return list}
+function evidenceJson(item){const readKey=state.run.mode==="live"?"erpReadHash":"fixtureHash";return JSON.stringify({runId:state.run.runId,mode:state.run.mode,generatedAt:state.run.generatedAt,manifestHash:state.run.manifestHash,[readKey]:state.run.exportHash,item},null,2)}
+async function copy(value,node){try{await navigator.clipboard.writeText(value);node.textContent="Copied"}catch{node.textContent="Copy unavailable — download the report instead"}}
+function renderEvidence(){const items=filteredItems();document.querySelectorAll("#filter-group button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.filter===state.filter));$("empty-state").hidden=items.length>0;$("evidence-body").replaceChildren(...items.map(item=>{const tr=element("tr"),job=element("td"),button=element("button",{className:"row-button",text:item.jobId});button.type="button";button.setAttribute("aria-pressed",item.jobId===state.selectedJob);button.addEventListener("click",()=>{state.selectedJob=item.jobId;renderEvidence()});job.append(button);const verdict=element("td");verdict.append(badge(item.status));tr.classList.toggle("selected",item.jobId===state.selectedJob);tr.append(job,element("td",{className:"mono",text:item.reasonCode}),element("td",{text:formatAmount(item.expectedTotal,item.currency)}),element("td",{text:formatAmount(item.observedTotal,item.currency)}),element("td",{className:"mono",text:item.recordIds.join(", ")||"None"}),verdict);return tr}));$("mobile-cards").replaceChildren(...items.map(item=>{const details=element("details"),summary=element("summary");summary.append(element("strong",{text:item.jobId}),element("span",{text:item.reasonCode}),badge(item.status));const body=element("div",{className:"mobile-evidence"});body.append(element("p",{text:`Expected ${formatAmount(item.expectedTotal,item.currency)} · Observed ${formatAmount(item.observedTotal,item.currency)}`}),differencesNode(item));const button=element("button",{className:"button secondary",text:"Copy Evidence"});button.onclick=()=>copy(evidenceJson(item),$("results-announcement"));body.append(button);details.append(summary,body);return details}));renderInspector(state.run.items.find(i=>i.jobId===state.selectedJob))}
+function renderInspector(item){$("inspector").hidden=!item;if(!item)return;const live=state.run.mode==="live";$("inspector-title").textContent=item.jobId;$("inspector-status").textContent=item.status;$("inspector-status").className=`status-badge ${item.status}`;$("inspector-reason").textContent=item.reasonCode;$("inspector-expected").textContent=formatAmount(item.expectedTotal,item.currency);$("inspector-observed").textContent=formatAmount(item.observedTotal,item.currency);$("inspector-records").previousElementSibling.textContent=live?"ERP IDs":"Fixture IDs";$("inspector-records").textContent=item.recordIds.join(", ")||"None";$("inspector-manifest").textContent=shortHash(state.run.manifestHash);$("inspector-export").previousElementSibling.textContent=live?"ERP Read":"Fixture";$("inspector-export").textContent=shortHash(state.run.exportHash);$("inspector-differences").replaceChildren(differencesNode(item))}
+function proof(id,value){const node=$(id);node.textContent=value===true?"Proven":value===false?"Not Proven":"Not Recorded";node.className=value===true?"proven":value===false?"unproven":""}
+function renderReport(){showPublic("report-view",{report:true});const run=state.run,s=run.summary,live=run.mode==="live";$("hero-verified").textContent=s.verified;$("hero-claimed").textContent=s.claimed;$("hero-exceptions").textContent=s.exceptions;$("report-title").nextElementSibling.textContent=live?`${s.exceptions} exceptions need review. This report contains condensed evidence, not raw ERP exports.`:`${s.exceptions} exceptions need review in this bundled synthetic fixture.`;$("verified-count").textContent=s.verified;$("exception-count").textContent=s.exceptions;$("unknown-count").textContent=s.unknown;$("run-id").textContent=run.runId;$("source-badge").textContent=live?"Validated Live Run":"Synthetic Sample";$("source-badge").className=`source-badge ${run.mode}`;$("report-expiry").textContent=run.expiresAt?`Expires ${formatDate(run.expiresAt)}`:"Time-Limited";$("filter-all-count").textContent=s.claimed;$("filter-verified-count").textContent=s.verified;$("filter-exceptions-count").textContent=s.exceptions;$("filter-unknown-count").textContent=s.unknown;$("manifest-hash").textContent=run.manifestHash||"Not Recorded";$("export-hash").previousElementSibling.textContent=live?"ERP Read SHA-256":"Fixture SHA-256";$("export-hash").textContent=run.exportHash||"Not Recorded";$("generated-at").textContent=formatDate(run.generatedAt);$("artifact-validation").textContent=live?"Live Proof Gates Passed":"Synthetic Boundary Enforced";$("permission-read").previousElementSibling.textContent=live?"ERP Read Fingerprinted":"Fixture Fingerprinted";proof("permission-mutate",live?run.permissionEvidence?.verifierCannotMutate:undefined);proof("permission-read",live&&run.exportHash?true:undefined);proof("permission-pay",live?run.permissionEvidence?.verifierCannotPay:undefined);proof("lifecycle-browsers",live?run.lifecycle?.browsersReleased:undefined);proof("lifecycle-sandbox",live?run.lifecycle?.sandboxKilled:undefined);$("evidence-body").closest("table").querySelector("th:nth-child(5)").textContent=live?"ERP Records":"Fixture Records";$("evidence-boundary").textContent=live?"Read-only live artifact. Condensed evidence only; not an approval or payment authorization.":"Synthetic sample. Not a customer result or production finance evidence.";const read=document.querySelector('[data-replay="read"]');read.querySelector("strong").textContent=live?"ERP Read":"Fixture State";read.querySelector("small").textContent=live?"Fingerprint + observed ERP IDs":"Bundled synthetic records";const owned=Boolean(state.user)&&!state.publicAccess;$("share-run").hidden=!owned||state.currentShared;$("revoke-share").hidden=!owned||!state.currentShared;$("delete-run").hidden=!owned;$("back-to-runs").hidden=!owned;$("report-home").href=owned?"#/runs":"#/";state.filter=s.exceptions?"exceptions":"all";state.selectedJob=filteredItems()[0]?.jobId||null;$("replay-claim-count").textContent=`${s.claimed} rows`;$("replay-verdict-count").textContent=`${s.exceptions} exceptions`;renderGraph("claim");renderEvidence()}
+function renderGraph(stage){document.querySelectorAll("[data-replay]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.replay===stage));const r=state.run,s=r.summary,live=r.mode==="live",data={claim:["Checkpoint 1","Agent Claim","The retained manifest fingerprint and condensed expected values define the claim.","Claimed Rows",s.claimed,"Manifest Fingerprint",shortHash(r.manifestHash),"all"],read:live?["Checkpoint 2","ERP Read","The retained ERP-read fingerprint and observed record IDs came from a separate read-only session.","Observed Jobs",r.items.filter(i=>i.recordIds.length).length,"ERP Read Fingerprint",shortHash(r.exportHash),"all"]:["Checkpoint 2","Fixture State","The sample uses bundled synthetic observations. No ERP or Solari browser was contacted.","Fixture Jobs",r.items.filter(i=>i.recordIds.length).length,"Fixture Fingerprint",shortHash(r.exportHash),"all"],compare:["Checkpoint 3","Comparison","The report retains condensed field-level differences, not the raw ERP export.","Exact Matches",s.verified,"Unknown",s.unknown,"exceptions"],verdict:["Checkpoint 4","Verdict","Exceptions identify where the condensed evidence chain does not support the claim.","Exceptions",s.exceptions,"Verified",s.verified,"exceptions"]}[stage];[["replay-kicker",data[0]],["replay-heading",data[1]],["replay-copy",data[2]],["replay-label-a",data[3]],["replay-value-a",data[4]],["replay-label-b",data[5]],["replay-value-b",data[6]]].forEach(([id,value])=>$(id).textContent=value);$("replay-action").dataset.filter=data[7]}
+async function share(){try{const{url}=await request(`/api/runs/${state.run.runId}/share`,{method:"POST",body:{}}),absolute=new URL(url,location.origin).href,link=element("a",{text:"Open Public Report"});link.href=absolute;link.target="_blank";link.rel="noopener";state.currentShared=true;$("share-run").hidden=true;$("revoke-share").hidden=false;$("share-status").replaceChildren("Public link ready. ",link);try{await navigator.clipboard.writeText(absolute);$("share-status").prepend("Copied. ")}catch{}}catch(error){$("share-status").textContent=error.message}}
+async function revoke(){try{await request(`/api/runs/${state.run.runId}/share`,{method:"DELETE"});state.currentShared=false;$("share-run").hidden=false;$("revoke-share").hidden=true;$("share-status").textContent="Public link revoked."}catch(error){$("share-status").textContent=error.message}}
+async function removeRun(){try{await request(`/api/runs/${state.run.runId}`,{method:"DELETE"});$("delete-dialog").close();location.hash="/runs"}catch(error){$("delete-dialog").close();$("share-status").textContent=error.message}}
+function download(){const url=URL.createObjectURL(new Blob([JSON.stringify(state.run,null,2)],{type:"application/json"})),a=element("a");a.href=url;a.download=`doneledger-${state.run.runId}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),0)}
+
+function bind(){
+  addEventListener("hashchange",route);$("login-form").addEventListener("submit",e=>{e.preventDefault();submitAuth("login",e.currentTarget,$("login-error"))});$("signup-form").addEventListener("submit",e=>{e.preventDefault();submitAuth("signup",e.currentTarget,$("signup-error"))})
+  document.addEventListener("click",event=>{const action=event.target.closest("[data-action]")?.dataset.action;if(action==="logout")logout();if(action==="demo")createDemo();if(action==="public-sample")createDemo();if(action==="refresh-runs")loadRuns();if(action==="sample-csv")loadCsv(sampleCsv,"doneledger-sample.csv");if(action==="remove-file")clearCsv()})
+  $("mobile-menu").onclick=()=>setNavigation(!document.body.classList.contains("nav-open"));$("nav-backdrop").onclick=()=>setNavigation(false,true);document.addEventListener("keydown",event=>{if(event.key==="Escape"&&document.body.classList.contains("nav-open"))setNavigation(false,true)});mobileNavigation.addEventListener("change",()=>setNavigation(false))
+  $("manifest-file").onchange=async e=>{const file=e.target.files[0];if(!file)return;try{loadCsv(await file.text(),file.name)}catch(error){clearCsv();$("file-error").textContent=error.message}}
+  for(const type of["dragenter","dragover"])$("drop-zone").addEventListener(type,e=>{e.preventDefault();$("drop-zone").classList.add("dragging")});for(const type of["dragleave","drop"])$("drop-zone").addEventListener(type,e=>{e.preventDefault();$("drop-zone").classList.remove("dragging")});$("drop-zone").addEventListener("drop",async e=>{const file=e.dataTransfer.files[0];if(!file)return;try{loadCsv(await file.text(),file.name)}catch(error){clearCsv();$("file-error").textContent=error.message}})
+  $("to-connect").onclick=()=>{if(!state.csv){$("file-error").textContent="Choose a valid CSV first.";return $("manifest-file").focus()}setStep(2)};document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>setStep(Number(b.dataset.back)));$("to-review").onclick=prepareReview;$("run-form").onsubmit=submitRun;$("run-search").oninput=renderRuns
+  $("filter-group").onclick=e=>{const b=e.target.closest("button[data-filter]");if(b)setFilter(b.dataset.filter)};$("copy-evidence").onclick=()=>{const item=state.run.items.find(i=>i.jobId===state.selectedJob);if(item)copy(evidenceJson(item),$("copy-status"))};$("download-json").onclick=download;$("share-run").onclick=share;$("revoke-share").onclick=revoke;$("delete-run").onclick=()=>$("delete-dialog").showModal();$("confirm-delete").onclick=e=>{e.preventDefault();removeRun()};document.querySelectorAll("[data-replay]").forEach(b=>b.onclick=()=>renderGraph(b.dataset.replay));$("replay-action").onclick=()=>{setFilter($("replay-action").dataset.filter);$("evidence").scrollIntoView()}
 }
 
-function parseCsv(source) {
-  const rows = []; let row = [], field = "", quoted = false
-  for (let i = 0; i < source.length; i += 1) {
-    const char = source[i]
-    if (quoted && char === '"' && source[i + 1] === '"') { field += '"'; i += 1 }
-    else if (char === '"') quoted = !quoted
-    else if (char === "," && !quoted) { row.push(field.trim()); field = "" }
-    else if ((char === "\n" || char === "\r") && !quoted) { if (char === "\r" && source[i + 1] === "\n") i += 1; row.push(field.trim()); if (row.some(Boolean)) rows.push(row); row = []; field = "" }
-    else field += char
-  }
-  row.push(field.trim()); if (row.some(Boolean)) rows.push(row)
-  if (quoted) throw new Error("CSV contains an unclosed quote")
-  if (rows.length < 2) throw new Error("CSV must contain a header and at least 1 row")
-  const headers = rows[0].map((value) => value.toLowerCase())
-  const missing = REQUIRED_HEADERS.filter((header) => !headers.includes(header))
-  if (missing.length) throw new Error(`Missing columns: ${missing.join(", ")}`)
-  if (rows.length - 1 > 25) throw new Error("CSV is limited to 25 invoice rows")
-  for (let index = 1; index < rows.length; index += 1) if (rows[index].length !== headers.length || rows[index].some((value) => !value)) throw new Error(`Row ${index + 1} has a missing or extra value`)
-  return { headers, rows: rows.slice(1) }
-}
-
-function setStep(step) {
-  state.step = step
-  document.querySelectorAll(".wizard-step").forEach((node) => { node.hidden = Number(node.dataset.step) !== step })
-  document.querySelectorAll("[data-step-indicator]").forEach((node) => { const value = Number(node.dataset.stepIndicator); node.classList.toggle("active", value === step); node.classList.toggle("complete", value < step) })
-  const heading = document.querySelector(`.wizard-step[data-step="${step}"] h2`)
-  heading?.setAttribute("tabindex", "-1"); heading?.focus({ preventScroll: true })
-}
-
-function loadCsv(source, name) {
-  if (!name.toLowerCase().endsWith(".csv")) throw new Error("Choose a .csv file")
-  if (new Blob([source]).size > 2 * 1024 * 1024) throw new Error("CSV must be 2 MB or smaller")
-  const parsed = parseCsv(source)
-  state.csv = source; state.csvRows = parsed.rows; state.fileName = name
-  $("file-error").textContent = ""; $("file-name").textContent = name; $("row-count").textContent = `${parsed.rows.length} row${parsed.rows.length === 1 ? "" : "s"}`
-  const headRow = element("tr"); parsed.headers.forEach((header) => headRow.append(element("th", { text: header }))); $("preview-head").replaceChildren(headRow)
-  $("preview-body").replaceChildren(...parsed.rows.slice(0, 5).map((values) => { const row = element("tr"); values.forEach((value) => row.append(element("td", { text: value }))); return row }))
-  $("import-preview").hidden = false
-}
-
-function clearCsv() { state.csv = ""; state.csvRows = []; state.fileName = ""; $("manifest-file").value = ""; $("import-preview").hidden = true }
-
-function validateConnection() {
-  const fields = [$("erp-url"), $("erp-username"), $("erp-password"), $("access-code")]
-  const invalid = fields.find((field) => !field.checkValidity())
-  if (invalid) { $("connection-error").textContent = invalid.validationMessage; invalid.focus(); return false }
-  try {
-    const url = new URL($("erp-url").value)
-    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error()
-    $("connected-host").textContent = url.host; $("connection-proof").hidden = false; $("connection-error").textContent = ""; return true
-  } catch { $("connection-error").textContent = "Use a public HTTPS URL without credentials, query or fragment."; $("erp-url").focus(); return false }
-}
-
-function prepareReview() {
-  if (!validateConnection()) return
-  $("review-file").textContent = state.fileName; $("review-rows").textContent = `${state.csvRows.length} expected invoice rows`; $("review-host").textContent = new URL($("erp-url").value).host; setStep(3)
-}
-
-function showView(id) {
-  document.querySelectorAll(".view").forEach((view) => { view.hidden = view.id !== id })
-  window.scrollTo({ top: 0, behavior: "auto" })
-}
-
-function routeTo(hash) { location.hash = hash }
-
-async function handleRoute() {
-  if (/^\/report\/[0-9a-f-]+$/i.test(location.pathname)) return loadPublicReport()
-  const route = location.hash.replace(/^#/, "") || "/"
-  if (route === "/new") { showView("wizard-view"); setStep(state.step); return }
-  if (route === "/runs") { showView("runs-view"); await loadRuns(); return }
-  const match = route.match(/^\/runs\/([0-9a-f-]+)$/i)
-  if (match) { showView("report-view"); await loadOwnedReport(match[1]); return }
-  showView("landing-view")
-}
-
-function startProgress(runId = "allocating") {
-  showView("progress-view"); $("progress-run-id").textContent = runId; state.startedAt = Date.now(); let index = 0
-  const keys = ["validate", "browser", "compare", "cleanup", "report"]
-  document.querySelectorAll("[data-run-step]").forEach((node) => { node.className = ""; node.querySelector("em").textContent = "Pending" })
-  clearInterval(state.progressTimer)
-  const update = () => {
-    const elapsed = Math.floor((Date.now() - state.startedAt) / 1000); $("progress-time").textContent = `${elapsed}s`
-    const current = document.querySelector(`[data-run-step="${keys[Math.min(index, keys.length - 1)]}"]`)
-    if (current && !current.classList.contains("running")) { current.classList.add("running"); current.querySelector("em").textContent = "Running"; $("progress-label").textContent = current.querySelector("strong").textContent; $("progress-status").textContent = `${current.querySelector("strong").textContent} is in progress.` }
-    $("progress-fill").style.width = `${Math.min(90, 10 + index * 18)}%`; document.querySelector(".progress-bar").setAttribute("aria-valuenow", String(Math.min(90, 10 + index * 18)))
-    if (index < 2 && elapsed >= (index + 1) * 2) { current.className = "complete"; current.querySelector("em").textContent = "Passed"; index += 1 }
-  }
-  update(); state.progressTimer = setInterval(update, 1000)
-}
-
-function finishProgress(run) {
-  clearInterval(state.progressTimer); state.progressTimer = null
-  document.querySelectorAll("[data-run-step]").forEach((node) => { node.className = "complete"; node.querySelector("em").textContent = "Passed" })
-  $("progress-fill").style.width = "100%"; document.querySelector(".progress-bar").setAttribute("aria-valuenow", "100"); $("progress-label").textContent = "Verification Complete"; $("progress-status").textContent = `Verdict ready: ${run.summary.verified} verified, ${run.summary.exceptions} exceptions.`
-}
-
-function failProgress(message) {
-  clearInterval(state.progressTimer); state.progressTimer = null
-  const running = document.querySelector("[data-run-step].running"); if (running) { running.className = "failed"; running.querySelector("em").textContent = "Failed" }
-  $("progress-label").textContent = "Verification Failed Safely"; $("progress-status").textContent = `${message} No completed verdict was published.`
-}
-
-function syncJobProgress(step) {
-  const order = ["validate", "browser", "compare", "cleanup", "report"]
-  const aliases = { queued: "validate", validating: "validate", reading: "browser", browser: "browser", comparing: "compare", cleanup: "cleanup", reporting: "report" }
-  const active = aliases[String(step).toLowerCase()] ?? "browser", activeIndex = order.indexOf(active)
-  order.forEach((key, index) => { const node = document.querySelector(`[data-run-step="${key}"]`); node.className = index < activeIndex ? "complete" : index === activeIndex ? "running" : ""; node.querySelector("em").textContent = index < activeIndex ? "Passed" : index === activeIndex ? "Running" : "Pending" })
-  const percent = Math.max(10, activeIndex * 20 + 10); $("progress-fill").style.width = `${percent}%`; document.querySelector(".progress-bar").setAttribute("aria-valuenow", String(percent)); $("progress-status").textContent = `${document.querySelector(`[data-run-step="${active}"] strong`).textContent} is in progress.`
-}
-
-async function pollJob(runId) {
-  for (;;) {
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-    const { job } = await api(`/api/jobs/${encodeURIComponent(runId)}`)
-    $("progress-run-id").textContent = runId; syncJobProgress(job.step ?? job.status)
-    if (job.status === "complete") { const { run } = await api(`/api/runs/${encodeURIComponent(runId)}`); return normalizeRun(run) }
-    if (job.status === "failed") throw new Error(job.error || "Live verification failed safely")
-  }
-}
-
-async function createDemo() {
-  startProgress("sample")
-  try { const { run } = await api("/api/demo-runs", { method: "POST", body: JSON.stringify({}) }); const normalized = normalizeRun(run); finishProgress(normalized); setTimeout(() => routeTo(`/runs/${normalized.runId}`), 450) }
-  catch {
-    try { const response = await fetch("/results/run.json", { cache: "no-store" }); const run = normalizeRun(await response.json()); state.run = run; state.source = run.mode; finishProgress(run); setTimeout(() => { showView("report-view"); renderRun() }, 450) }
-    catch (error) { failProgress(error.message) }
-  }
-}
-
-async function submitRun(event) {
-  event.preventDefault(); $("submit-error").textContent = ""
-  if (!$("scope-confirm").checked) { $("submit-error").textContent = "Confirm the read-only scope before starting."; $("scope-confirm").focus(); return }
-  const dolibarr = { baseUrl: $("erp-url").value, username: $("erp-username").value, password: $("erp-password").value }
-  const accessCode = $("access-code").value
-  startProgress("allocating")
-  try {
-    const response = await api("/api/runs", { method: "POST", body: JSON.stringify({ csv: state.csv, dolibarr, accessCode }) })
-    $("erp-password").value = ""; $("access-code").value = ""
-    const normalized = response.job ? await pollJob(response.job.runId) : normalizeRun(response.run)
-    $("progress-run-id").textContent = normalized.runId; finishProgress(normalized); setTimeout(() => routeTo(`/runs/${normalized.runId}`), 450)
-  } catch (error) { $("erp-password").value = ""; $("access-code").value = ""; failProgress(error.message) }
-}
-
-async function loadRuns() {
-  $("runs-error").textContent = ""
-  try { const body = await api("/api/runs"); state.runs = body.runs.map((run) => ({ ...run, summary: run.summary ?? {} })); renderRuns() }
-  catch (error) { state.runs = []; renderRuns(); $("runs-error").textContent = error.message }
-}
-
-function renderRuns() {
-  const query = $("run-search").value.trim().toLowerCase()
-  const runs = state.runs.filter((run) => `${run.runId} ${run.mode}`.toLowerCase().includes(query))
-  $("runs-body").replaceChildren(...runs.map((run) => {
-    const row = element("tr"); const runCell = element("td"); const link = element("a", { text: run.runId.slice(0, 12) }); link.href = `#/runs/${run.runId}`; runCell.append(link)
-    const status = run.summary?.unknown > 0 ? "unknown" : run.summary?.exceptions > 0 ? "exception" : "verified"
-    const actions = element("td"); const open = element("a", { className: "text-button", text: "Open" }); open.href = `#/runs/${run.runId}`; actions.append(open)
-    row.append(runCell, element("td", { text: formatDate(run.generatedAt) }), element("td", { text: `${run.summary?.verified ?? 0}/${run.summary?.claimed ?? 0} verified` }), (() => { const cell = element("td"); cell.append(badge(status)); return cell })(), actions); return row
-  }))
-  $("empty-history").hidden = runs.length > 0; $("runs-body").closest(".table-scroll").hidden = runs.length === 0
-}
-
-async function loadOwnedReport(id) {
-  try { const { run } = await api(`/api/runs/${encodeURIComponent(id)}`); state.run = normalizeRun(run); state.source = state.run.mode; state.publicAccess = false; state.currentShared = run.shared === true; renderRun() }
-  catch (error) { rejectReport(error.message) }
-}
-
-async function loadPublicReport() {
-  showView("report-view"); const id = location.pathname.split("/").pop(); const token = location.hash.slice(1)
-  try { if (!token) throw new Error("This share link is incomplete"); const { run } = await api(`/api/reports/${encodeURIComponent(id)}/access`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: "{}" }); state.run = normalizeRun(run); state.source = state.run.mode; state.publicAccess = true; renderRun() }
-  catch (error) { rejectReport(error.message) }
-}
-
-function rejectReport(message) { state.run = fallbackRun; state.source = "rejected"; state.publicAccess = true; $("validation-alert").hidden = false; $("validation-alert").textContent = `${message}. No live claim was accepted.`; renderRun() }
-
-function filteredItems() { if (state.filter === "all") return state.run.items; const status = state.filter === "exceptions" ? "exception" : state.filter; return state.run.items.filter((item) => item.status === status) }
-function selectedItem() { return state.run.items.find(({ jobId }) => jobId === state.selectedJob) ?? null }
-function setFilter(filter) { state.filter = FILTERS.has(filter) ? filter : "exceptions"; const visible = filteredItems(); if (!visible.some(({ jobId }) => jobId === state.selectedJob)) state.selectedJob = visible[0]?.jobId ?? null; renderEvidence(); $("results-announcement").textContent = `${visible.length} evidence result${visible.length === 1 ? "" : "s"} shown.` }
-function selectJob(jobId) { if (!state.run.items.some((item) => item.jobId === jobId)) return; state.selectedJob = jobId; renderEvidence(); $("results-announcement").textContent = `${jobId} selected.` }
-
-function differencesNode(item) {
-  if (!item.differences.length) return element("p", { className: "no-difference", text: "No field-level difference recorded." })
-  const list = element("div", { className: "difference-list" }); for (const difference of item.differences) { const row = element("div", { className: "difference-row" }); row.append(element("strong", { text: difference.field }), element("span", { text: text(difference.expected) }), element("span", { text: "→" }), element("span", { text: text(difference.observed) })); list.append(row) } return list
-}
-
-function evidenceOutput(item) { return JSON.stringify({ runId: state.run.runId, mode: state.run.mode, generatedAt: state.run.generatedAt, manifestHash: state.run.manifestHash, exportHash: state.run.exportHash, item }, null, 2) }
-async function copyText(value, statusNode) { try { await navigator.clipboard.writeText(value); statusNode.textContent = "Copied" } catch { statusNode.textContent = "Copy unavailable — download the JSON instead" } }
-
-function mobileDetail(item) {
-  const detail = element("div", { className: "mobile-detail" }), comparison = element("dl", { className: "comparison-grid" })
-  for (const [label, value] of [["Expected", formatAmount(item.expectedTotal, item.currency)], ["Observed", formatAmount(item.observedTotal, item.currency)]]) { const group = element("div"); group.append(element("dt", { text: label }), element("dd", { text: value })); comparison.append(group) }
-  const block = element("section", { className: "inspector-block" }); block.append(element("h4", { text: "Exact Differences" }), differencesNode(item)); const copy = element("button", { className: "button secondary mobile-copy", text: "Copy Evidence JSON" }); copy.type = "button"; copy.addEventListener("click", () => copyText(evidenceOutput(item), $("results-announcement"))); detail.append(comparison, block, copy); return detail
-}
-
-function renderEvidence() {
-  const items = filteredItems(); $("empty-state").hidden = items.length > 0
-  document.querySelectorAll("#filter-group button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.filter === state.filter)))
-  $("evidence-body").replaceChildren(...items.map((item) => { const row = element("tr"); if (item.jobId === state.selectedJob) row.classList.add("selected"); const job = element("td"), button = element("button", { className: "row-select", text: item.jobId }); button.type = "button"; button.setAttribute("aria-pressed", String(item.jobId === state.selectedJob)); button.setAttribute("aria-label", `Inspect evidence for ${item.jobId}`); button.addEventListener("click", () => selectJob(item.jobId)); job.append(button); const verdict = element("td"); verdict.append(badge(item.status)); row.append(job, element("td", { className: "reason-code", text: item.reasonCode }), element("td", { className: "amount", text: formatAmount(item.expectedTotal, item.currency) }), element("td", { className: "amount", text: formatAmount(item.observedTotal, item.currency) }), element("td", { className: "record-code", text: item.recordIds.length ? item.recordIds.join(", ") : "None found" }), verdict); return row }))
-  $("mobile-cards").replaceChildren(...items.map((item) => { const article = element("article", { className: "mobile-card" }), details = element("details"), summary = element("summary"), title = element("span", { className: "mobile-card-title" }); title.append(element("strong", { text: item.jobId }), element("small", { text: item.reasonCode })); summary.append(title, badge(item.status)); details.open = item.jobId === state.selectedJob; details.addEventListener("toggle", () => { if (details.open) state.selectedJob = item.jobId }); details.append(summary, mobileDetail(item)); article.append(details); return article }))
-  renderInspector(selectedItem())
-}
-
-function renderInspector(item) {
-  $("inspector").hidden = !item; if (!item) return
-  $("inspector-title").textContent = item.jobId; $("inspector-reason").textContent = item.reasonCode; $("inspector-expected").textContent = formatAmount(item.expectedTotal, item.currency); $("inspector-observed").textContent = formatAmount(item.observedTotal, item.currency); $("inspector-records").textContent = item.recordIds.length ? item.recordIds.join(", ") : "None found"; $("inspector-manifest").textContent = shortHash(state.run.manifestHash); $("inspector-export").textContent = shortHash(state.run.exportHash); $("inspector-differences").replaceChildren(differencesNode(item)); $("inspector-status").className = `status-badge ${item.status}`; $("inspector-status").textContent = item.status
-}
-
-function proofLabel(value) { return value === true ? ["Proven", "proven"] : value === false ? ["Not Proven", "unproven"] : ["Not Recorded", ""] }
-function renderProof(id, value) { const [label, className] = proofLabel(value); $(id).textContent = label; $(id).className = className }
-
-function renderRun() {
-  showView("report-view"); const { run } = state, summary = run.summary
-  if (state.source !== "rejected") { $("validation-alert").hidden = true; $("validation-alert").textContent = "" }
-  for (const [id, value] of [["hero-claimed", summary.claimed], ["hero-exceptions", summary.exceptions], ["claimed-count", summary.claimed], ["verified-count", summary.verified], ["exception-count", summary.exceptions], ["unknown-count", summary.unknown], ["filter-all-count", summary.claimed], ["filter-verified-count", summary.verified], ["filter-exceptions-count", summary.exceptions], ["filter-unknown-count", summary.unknown]]) $(id).textContent = value
-  $("inspect-cta").textContent = `Inspect ${summary.exceptions} Exception${summary.exceptions === 1 ? "" : "s"}`; $("run-id").textContent = run.runId; $("source-badge").dataset.mode = state.source; $("source-badge").textContent = state.source === "live" ? "Validated Live Run" : state.source === "rejected" ? "Artifact Rejected" : "Synthetic Sample"
-  const retention = run.expiresAt ? ` Saved until ${formatDate(run.expiresAt)}.` : ""
-  $("evidence-boundary").textContent = (state.source === "live" ? "Read-only live artifact: hashes, cleanup and the recorded negative permission probes passed." : state.source === "rejected" ? "The requested artifact failed validation. The bundled sample is shown without a live claim." : "Synthetic sample. This is not a customer result, compliance assessment or payment authorization.") + retention
-  $("manifest-hash").textContent = text(run.manifestHash); $("export-hash").textContent = text(run.exportHash); $("artifact-validation").textContent = state.source === "live" ? "Schema, counters and live gates passed" : state.source === "rejected" ? "Requested artifact rejected" : "Schema and counters passed; sample boundary enforced"; $("generated-at").textContent = formatDate(run.generatedAt); $("disclaimer-copy").textContent = run.disclaimer
-  renderProof("permission-mutate", run.permissionEvidence?.verifierCannotMutate); renderProof("permission-validate", Boolean(run.exportHash) || undefined); renderProof("permission-pay", run.permissionEvidence?.verifierCannotPay); renderProof("lifecycle-browsers", run.lifecycle?.browsersReleased); renderProof("lifecycle-sandbox", run.lifecycle?.sandboxKilled)
-  const ownedRun = !state.publicAccess && /^[0-9a-f-]{36}$/i.test(run.runId)
-  $("share-run").hidden = !ownedRun || state.currentShared; $("revoke-share").hidden = !ownedRun || !state.currentShared; $("delete-run").hidden = !ownedRun; $("replay-claim-count").textContent = `${summary.claimed} manifest rows`; $("replay-verdict-count").textContent = `${summary.exceptions} exceptions`
-  state.filter = summary.exceptions ? "exceptions" : "all"; state.selectedJob = filteredItems()[0]?.jobId ?? null; renderReplay("claim"); renderEvidence()
-}
-
-function renderReplay(stage) {
-  document.querySelectorAll("[data-replay]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.replay === stage)))
-  const { run } = state, data = {
-    claim: ["Checkpoint 1", "Agent Claim", "The uploaded manifest defines exactly what the external agent claimed to have completed.", "Claimed Records", run.summary.claimed, "Manifest Fingerprint", shortHash(run.manifestHash), "Inspect Manifest Evidence", "all"],
-    read: ["Checkpoint 2", "Fresh ERP Read", "An isolated read-only browser observed Dolibarr independently from the external agent.", "Observed Records", run.items.filter((item) => item.recordIds.length).length, "Export Fingerprint", shortHash(run.exportHash), "Inspect ERP Evidence", "all"],
-    compare: ["Checkpoint 3", "Sandbox Compare", "Expected and observed fields were compared deterministically outside the ERP session.", "Exact Matches", run.summary.verified, "Unknown Results", run.summary.unknown, "Inspect Differences", "exceptions"],
-    verdict: ["Checkpoint 4", "Evidence Verdict", "Exceptions remain visible as breaks in this run summary, with record references and exact field differences.", "Exceptions", run.summary.exceptions, "Verified", run.summary.verified, "Open Exceptions", "exceptions"],
-  }[stage]
-  for (const [id, value] of [["replay-kicker", data[0]], ["replay-heading", data[1]], ["replay-copy", data[2]], ["replay-label-a", data[3]], ["replay-value-a", data[4]], ["replay-label-b", data[5]], ["replay-value-b", data[6]], ["replay-action", data[7]]]) $(id).textContent = value
-  $("replay-action").dataset.filter = data[8]
-}
-
-async function shareRun() {
-  $("share-status").textContent = "Creating a private-to-public report link…"
-  try { const { url } = await api(`/api/runs/${encodeURIComponent(state.run.runId)}/share`, { method: "POST", body: "{}" }); const absolute = new URL(url, location.origin).href; const link = element("a", { text: "Open Public Report" }); link.href = absolute; link.target = "_blank"; link.rel = "noopener"; state.currentShared = true; $("share-run").hidden = true; $("revoke-share").hidden = false; $("share-status").replaceChildren("Public link ready. ", link); try { await navigator.clipboard.writeText(absolute); $("share-status").prepend("Copied. ") } catch {} }
-  catch (error) { $("share-status").textContent = error.message }
-}
-
-async function revokeShare() {
-  try { await api(`/api/runs/${encodeURIComponent(state.run.runId)}/share`, { method: "DELETE", body: "{}" }); state.currentShared = false; $("share-run").hidden = false; $("revoke-share").hidden = true; $("share-status").textContent = "Public link revoked." }
-  catch (error) { $("share-status").textContent = error.message }
-}
-
-async function deleteRun() { try { await api(`/api/runs/${encodeURIComponent(state.run.runId)}`, { method: "DELETE", body: "{}" }); $("delete-dialog").close(); routeTo("/runs") } catch (error) { $("delete-dialog").close(); $("share-status").textContent = error.message } }
-function downloadRun() { const url = URL.createObjectURL(new Blob([`${JSON.stringify(state.run, null, 2)}\n`], { type: "application/json" })); const link = element("a"); link.href = url; link.download = `doneledger-${state.run.runId}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0) }
-
-function bindEvents() {
-  addEventListener("hashchange", handleRoute)
-  document.addEventListener("click", (event) => { const action = event.target.closest("[data-action]")?.dataset.action; if (action === "demo") createDemo(); if (action === "refresh-runs") loadRuns(); if (action === "sample-csv") { try { loadCsv(sampleCsv, "doneledger-sample.csv") } catch {} } if (action === "remove-file") clearCsv() })
-  $("manifest-file").addEventListener("change", async (event) => { const file = event.target.files[0]; if (!file) return; if (file.size > 2 * 1024 * 1024) return void ($("file-error").textContent = "CSV must be 2 MB or smaller."); try { loadCsv(await file.text(), file.name) } catch (error) { clearCsv(); $("file-error").textContent = error.message } })
-  for (const type of ["dragenter", "dragover"]) $("drop-zone").addEventListener(type, (event) => { event.preventDefault(); $("drop-zone").classList.add("dragging") })
-  for (const type of ["dragleave", "drop"]) $("drop-zone").addEventListener(type, (event) => { event.preventDefault(); $("drop-zone").classList.remove("dragging") })
-  $("drop-zone").addEventListener("drop", async (event) => { const file = event.dataTransfer.files[0]; if (!file) return; try { loadCsv(await file.text(), file.name) } catch (error) { clearCsv(); $("file-error").textContent = error.message } })
-  $("to-connect").addEventListener("click", () => { if (!state.csv) { $("file-error").textContent = "Choose a valid CSV before continuing."; $("manifest-file").focus(); return } setStep(2) })
-  document.querySelectorAll("[data-back]").forEach((button) => button.addEventListener("click", () => setStep(Number(button.dataset.back))))
-  $("to-review").addEventListener("click", prepareReview); $("run-form").addEventListener("submit", submitRun); $("run-search").addEventListener("input", renderRuns)
-  $("filter-group").addEventListener("click", (event) => { const button = event.target.closest("button[data-filter]"); if (button) setFilter(button.dataset.filter) })
-  $("copy-evidence").addEventListener("click", () => { const item = selectedItem(); if (item) copyText(evidenceOutput(item), $("copy-status")) })
-  $("download-json").addEventListener("click", downloadRun); $("share-run").addEventListener("click", shareRun); $("revoke-share").addEventListener("click", revokeShare); $("delete-run").addEventListener("click", () => $("delete-dialog").showModal()); $("confirm-delete").addEventListener("click", (event) => { event.preventDefault(); deleteRun() })
-  document.querySelectorAll("[data-replay]").forEach((button) => button.addEventListener("click", () => renderReplay(button.dataset.replay)))
-  $("replay-action").addEventListener("click", () => { setFilter($("replay-action").dataset.filter); $("evidence").scrollIntoView() })
-}
-
-bindEvents()
-handleRoute()
+bind();await refreshSession();await route()

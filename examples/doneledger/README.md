@@ -16,15 +16,19 @@ npm start
 open http://127.0.0.1:3000/
 ```
 
-The sample, CSV import, seven-day owner history, capability-link sharing, revocation and deletion work without credentials. Live verification is invitation-only and remains disabled unless the server has both `SOLARI_API_KEY` and `DONELEDGER_LIVE_ACCESS_CODE`. A live request uses one fresh Solari browser with the submitted read-only Dolibarr account, confirms invoice-create and payment-create routes are denied, reads the claimed invoice references, releases the browser, compares in one Solari sandbox, and saves only the condensed report. Credentials are not persisted.
+The marketing sample is public. Creating a demo or live run requires an email/password account so history, sharing, revocation and deletion remain isolated between users. Passwords are stored as salted scrypt hashes; expiring sessions use opaque HttpOnly cookies. There is deliberately no password reset, billing, team model or social login in this proof. Live verification is invitation-only and remains disabled unless the server has both `SOLARI_API_KEY` and `DONELEDGER_LIVE_ACCESS_CODE`. A live request uses one fresh Solari browser with the submitted read-only Dolibarr account, confirms invoice-create and payment-create routes are denied, reads the claimed invoice references, releases the browser, compares in one Solari sandbox, and saves only the condensed report. Credentials are not persisted.
 
 The SaaS answers a deliberately narrow question: do the invoice records in a submitted claim match a fresh Dolibarr snapshot? It does not prove who created those records, retain the complete ERP rows, or authorize accounting or payment actions. Input hashes in a report are fingerprints of the compared data, not independently recalculable proofs. Live jobs allow one process-wide run at a time, three attempts per hour per direct client address, no SDK retries, and a six-minute abort signal; reports expire after seven days.
 
 ```bash
 SOLARI_API_KEY=slr_live_... \
 DONELEDGER_LIVE_ACCESS_CODE=choose-a-long-private-code \
+DONELEDGER_ALLOWED_DOLIBARR_ORIGINS=https://your-authorized-erp.example \
+DONELEDGER_DATA_DIR=/persistent/doneledger \
 npm start
 ```
+
+`DONELEDGER_DATA_DIR` must point to a persistent private volume in deployment. It contains `auth.json` and run reports, written atomically with mode `0600`. The auth API is `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/logout`, and `GET /api/me`. Signup and login accept `{ "email": "...", "password": "..." }`; passwords must contain 12 to 128 characters. Sessions expire after seven days and logout invalidates the server-side session immediately.
 
 ![DoneLedger live verification proof](public/doneledger-live-proof.png)
 
@@ -36,16 +40,15 @@ Node 20 or newer is required for the verifier. The interface itself has no frame
 cd examples/doneledger
 npm ci
 npm test
-npm run demo
-python3 -m http.server 8000
-open http://localhost:8000/public/
+npm start
+open http://127.0.0.1:3000/
 ```
 
-The page loads the committed `results/run.json`: 17 verified, 3 exceptions, 0 unknown. If the artifact is missing or fails its schema, hash, counter, permission, or cleanup gates, the interface rejects the live claim and visibly falls back to its bundled fixture.
+Create an account, then click **Try Sample Run** to create a synthetic 17/20 report through the real HTTP API. The committed `results/run.json` remains the evidence for the earlier seeded proof CLI. If any loaded artifact fails its schema, hash, counter, permission, or cleanup gates, the interface rejects the live claim and visibly falls back to its bundled fixture.
 
-## Live-run gates
+## Legacy seeded-proof gates
 
-Do not label a run live until every gate passes:
+The optional `npm run live` CLI demonstrates the original two-browser seeded proof. Do not label that legacy proof live until every gate passes:
 
 1. A real Solari browser session signs into an external Dolibarr instance as the worker.
 2. Dolibarr has `MAIN_USE_ADVANCED_PERMS` enabled. Without it, create permission can imply validate permission.
@@ -117,7 +120,7 @@ The committed live artifact was generated on 2026-09-01 against a dedicated Doli
 
 ## Cost guardrails
 
-Live mode may allocate at most two ordinary browser sessions sequentially and one `base` sandbox. Each browser is released as soon as its phase ends; the sandbox has a hard five-minute ceiling and is killed in `finally`. No stealth, proxy, captcha, desktop, volume, snapshot, or recording is requested. Development and fixture validation stay local. Check the Solari balance before each live run and stop on insufficient credit or capacity instead of retrying blindly.
+The SaaS path allocates at most one ordinary browser session and one `base` sandbox, sequentially. The browser SDK uses a 15-second RPC timeout, page operations use 8-10 second timeouts, sandbox RPCs use 30 seconds, the sandbox has a five-minute ceiling, and a six-minute abort signal is checked between records and phases. The legacy seeded CLI may allocate two browsers sequentially and one sandbox. No stealth, proxy, captcha, desktop, volume, snapshot, or recording is requested. Development and fixture validation stay local. Check the Solari balance before each live run and stop on insufficient credit or capacity instead of retrying blindly.
 
 ## Claims this project must not make
 

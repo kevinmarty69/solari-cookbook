@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { buildArtifact, type RunArtifact } from "./artifact.ts"
+import { AuthError, AuthStore, type AuthUser } from "./auth.ts"
 import { parseInvoiceCsv } from "./csv.ts"
 import { runReadOnlyLive, safeDolibarrUrl } from "./solari.ts"
 import type { ExpectedInvoice, ObservedBatch, VerificationSummary } from "./types.ts"
@@ -11,10 +12,13 @@ import { hashObservedRecords, verifyBatch } from "./verify.ts"
 
 const BODY_LIMIT = 256 * 1024
 const OWNER_COOKIE = "doneledger_owner"
+const SESSION_COOKIE = "doneledger_session"
 const DEFAULT_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000
+const DEFAULT_SESSION_MS = 7 * 24 * 60 * 60 * 1_000
 
 interface StoredRun {
-  ownerHash: string
+  userId?: string
+  ownerHash?: string
   shareHash?: string
   expiresAt: string
   artifact: RunArtifact
@@ -44,12 +48,14 @@ export interface ServerOptions {
   retentionMs?: number
   liveRunner?: LiveRunner
   liveAccessCode?: string
+  allowedDolibarrOrigins?: ReadonlySet<string>
+  sessionMs?: number
   now?: () => number
 }
 
 interface LiveJob {
   runId: string
-  ownerHash: string
+  userId: string
   status: "running" | "complete" | "failed"
   step: "validate" | "browser" | "compare" | "cleanup" | "report" | "failed"
   startedAt: string
@@ -83,13 +89,15 @@ function cookieValue(request: IncomingMessage, name: string): string | undefined
   return undefined
 }
 
-function owner(request: IncomingMessage, response: ServerResponse): string {
-  const existing = cookieValue(request, OWNER_COOKIE)
-  if (existing && /^[A-Za-z0-9_-]{32,128}$/.test(existing)) return existing
-  const token = randomBytes(32).toString("base64url")
+function setSessionCookie(request: IncomingMessage, response: ServerResponse, token: string, expiresAt: string, now: number): void {
   const secure = request.headers["x-forwarded-proto"] === "https" || process.env.NODE_ENV === "production"
-  response.setHeader("Set-Cookie", `${OWNER_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${secure ? "; Secure" : ""}`)
-  return token
+  const maxAge = Math.max(0, Math.floor((Date.parse(expiresAt) - now) / 1_000))
+  response.setHeader("Set-Cookie", `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure ? "; Secure" : ""}`)
+}
+
+function clearSessionCookie(request: IncomingMessage, response: ServerResponse): void {
+  const secure = request.headers["x-forwarded-proto"] === "https" || process.env.NODE_ENV === "production"
+  response.setHeader("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure ? "; Secure" : ""}`)
 }
 
 function json(response: ServerResponse, status: number, value: unknown): void {
@@ -97,6 +105,8 @@ function json(response: ServerResponse, status: number, value: unknown): void {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
   })
   response.end(JSON.stringify(value))
 }
@@ -120,6 +130,8 @@ async function staticResponse(pathname: string, response: ServerResponse): Promi
       "Cache-Control": contentType.startsWith("image/") ? "public, max-age=86400" : "no-store",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Content-Security-Policy": "default-src 'self'; connect-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
     })
     response.end(body)
   } catch {
@@ -163,7 +175,7 @@ function publicRun(stored: StoredRun): RunArtifact & { expiresAt: string } {
   return { ...stored.artifact, expiresAt: stored.expiresAt }
 }
 
-function validateDolibarr(value: unknown): LiveRunInput["dolibarr"] {
+function validateDolibarr(value: unknown, allowedOrigins?: ReadonlySet<string>): LiveRunInput["dolibarr"] {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, "dolibarr is required")
   const input = value as Record<string, unknown>
   if (typeof input.baseUrl !== "string" || typeof input.username !== "string" || typeof input.password !== "string") {
@@ -178,6 +190,7 @@ function validateDolibarr(value: unknown): LiveRunInput["dolibarr"] {
   } catch {
     throw new HttpError(400, "Dolibarr baseUrl must be a public HTTPS URL without credentials, query or fragment")
   }
+  if (!allowedOrigins?.has(baseUrl.origin)) throw new HttpError(403, "Dolibarr origin is not enabled for this beta")
   return { baseUrl: baseUrl.origin + baseUrl.pathname.replace(/\/$/, ""), username: input.username.trim(), password: input.password }
 }
 
@@ -219,13 +232,15 @@ async function demoSources(csvSource: unknown): Promise<{ manifest: ExpectedInvo
 export function createDoneLedgerServer(options: ServerOptions = {}): Server {
   const dataDir = options.dataDir ?? fileURLToPath(new URL("../data/", import.meta.url))
   const retentionMs = options.retentionMs ?? DEFAULT_RETENTION_MS
+  const sessionMs = options.sessionMs ?? DEFAULT_SESSION_MS
   const now = options.now ?? Date.now
+  const auth = new AuthStore(`${dataDir}/auth.json`, sessionMs, now)
   let liveBusy = false
   const attempts = new Map<string, number[]>()
   const jobs = new Map<string, LiveJob>()
 
-  const rateLimit = (request: IncomingMessage, limit: number, windowMs: number) => {
-    const key = request.socket.remoteAddress ?? "unknown"
+  const rateLimit = (request: IncomingMessage, bucket: string, limit: number, windowMs: number, subject?: string) => {
+    const key = `${bucket}:${subject ? hash(subject) : request.socket.remoteAddress ?? "unknown"}`
     const cutoff = now() - windowMs
     const recent = (attempts.get(key) ?? []).filter((timestamp) => timestamp > cutoff)
     if (recent.length >= limit) throw new HttpError(429, "Too many requests; retry later")
@@ -257,21 +272,38 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
       if (stored && Date.parse(stored.expiresAt) <= now()) await rm(`${dataDir}/${name}`, { force: true })
     }
   }
-  const save = async (artifact: RunArtifact, ownerToken: string): Promise<StoredRun> => {
+  const save = async (artifact: RunArtifact, userId: string): Promise<StoredRun> => {
     const stored: StoredRun = {
-      ownerHash: hash(ownerToken),
+      userId,
       expiresAt: new Date(now() + retentionMs).toISOString(),
       artifact,
     }
     await writeStored(stored)
     return stored
   }
-  const owned = async (runId: string, ownerToken: string): Promise<StoredRun> => {
+  const owned = async (runId: string, userId: string): Promise<StoredRun> => {
     const stored = await readStored(runId)
-    if (!stored || stored.ownerHash !== hash(ownerToken) || Date.parse(stored.expiresAt) <= now()) {
+    if (!stored || stored.userId !== userId || Date.parse(stored.expiresAt) <= now()) {
       throw new HttpError(404, "Run not found")
     }
     return stored
+  }
+  const migrateLegacyRuns = async (legacyToken: string | undefined, userId: string): Promise<void> => {
+    if (!legacyToken || !/^[A-Za-z0-9_-]{32,128}$/.test(legacyToken)) return
+    await mkdir(dataDir, { recursive: true })
+    for (const name of await readdir(dataDir)) {
+      if (!/^[0-9a-f-]+\.json$/i.test(name)) continue
+      const stored = await readStored(name.slice(0, -5))
+      if (stored?.ownerHash !== hash(legacyToken) || stored.userId) continue
+      stored.userId = userId
+      delete stored.ownerHash
+      await writeStored(stored)
+    }
+  }
+  const requireUser = async (request: IncomingMessage): Promise<AuthUser> => {
+    const user = await auth.authenticate(cookieValue(request, SESSION_COOKIE))
+    if (!user) throw new HttpError(401, "Authentication required")
+    return user
   }
 
   return createServer(async (request, response) => {
@@ -290,11 +322,70 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
         }
         if (origin.host !== request.headers.host) throw new HttpError(403, "Cross-origin requests are not allowed")
       }
-      const ownerToken = owner(request, response)
       await purgeExpired()
 
+      const reportMatch = url.pathname.match(/^\/api\/reports\/([0-9a-f-]+)\/access$/i)
+      if (reportMatch && method === "POST") {
+        const token = request.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{32,128})$/)?.[1]
+        const stored = await readStored(reportMatch[1])
+        if (!token || !stored?.shareHash || !matchesHash(token, stored.shareHash) || Date.parse(stored.expiresAt) <= now()) {
+          throw new HttpError(404, "Report not found")
+        }
+        return json(response, 200, { run: publicRun(stored) })
+      }
+
+      if (method === "GET" && url.pathname === "/api/public-sample") {
+        const sources = await demoSources(undefined)
+        return json(response, 200, { run: buildArtifact({
+          mode: "fixture",
+          synthetic: true,
+          summary: verifyBatch(sources.manifest, sources.observed),
+          manifest: sources.manifest,
+          manifestHash: hash(sources.source),
+          observed: sources.observed,
+          now: new Date(now()),
+          runId: sources.observed.runId,
+        }) })
+      }
+
+      if (method === "GET" && url.pathname === "/api/me") {
+        const user = await auth.authenticate(cookieValue(request, SESSION_COOKIE))
+        if (!user && cookieValue(request, SESSION_COOKIE)) clearSessionCookie(request, response)
+        return json(response, 200, { user: user ?? null })
+      }
+
+      if (method === "POST" && (url.pathname === "/api/auth/signup" || url.pathname === "/api/auth/login")) {
+        const signup = url.pathname.endsWith("signup")
+        const body = await readJson(request)
+        const loginSubject = typeof body.email === "string" ? body.email.trim().toLowerCase() : "invalid-email"
+        rateLimit(request, signup ? "signup" : "login", signup ? 5 : 10, signup ? 60 * 60_000 : 15 * 60_000, signup ? undefined : loginSubject)
+        try {
+          const session = signup
+            ? await auth.signup(body.email, body.password, body.name)
+            : await auth.login(body.email, body.password)
+          await migrateLegacyRuns(cookieValue(request, OWNER_COOKIE), session.user.id)
+          setSessionCookie(request, response, session.token, session.expiresAt, now())
+          return json(response, signup ? 201 : 200, { user: session.user })
+        } catch (error) {
+          if (error instanceof AuthError) {
+            const status = error.code === "EMAIL_TAKEN" ? 409 : error.code === "INVALID_CREDENTIALS" ? 401 : 400
+            throw new HttpError(status, error.message)
+          }
+          throw error
+        }
+      }
+
+      if (method === "POST" && url.pathname === "/api/auth/logout") {
+        await auth.logout(cookieValue(request, SESSION_COOKIE))
+        clearSessionCookie(request, response)
+        response.writeHead(204).end()
+        return
+      }
+
+      const user = await requireUser(request)
+
       if (method === "POST" && url.pathname === "/api/demo-runs") {
-        rateLimit(request, 30, 10 * 60_000)
+        rateLimit(request, "demo", 30, 10 * 60_000)
         const body = await readJson(request)
         let sources: Awaited<ReturnType<typeof demoSources>>
         try {
@@ -313,14 +404,13 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
           now: new Date(now()),
           runId: sources.observed.runId,
         })
-        return json(response, 201, { run: publicRun(await save(artifact, ownerToken)) })
+        return json(response, 201, { run: publicRun(await save(artifact, user.id)) })
       }
 
       if (method === "POST" && url.pathname === "/api/runs") {
-        rateLimit(request, 3, 60 * 60_000)
+        rateLimit(request, "live", 3, 60 * 60_000)
         const liveRunner = options.liveRunner
         if (!liveRunner || !options.liveAccessCode) throw new HttpError(503, "Live verification is not configured")
-        if (liveBusy) throw new HttpError(429, "A live verification is already running")
         const body = await readJson(request)
         if (typeof body.accessCode !== "string" || !safeEqual(body.accessCode, options.liveAccessCode)) {
           throw new HttpError(403, "Live access code is invalid")
@@ -331,21 +421,23 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
         } catch (error) {
           throw new HttpError(400, error instanceof Error ? error.message : "CSV is invalid")
         }
-        const dolibarr = validateDolibarr(body.dolibarr)
+        const dolibarr = validateDolibarr(body.dolibarr, options.allowedDolibarrOrigins)
         const csvSource = csv(body.csv)
-        const runId = randomUUID()
-        const timestamp = new Date(now()).toISOString()
-        const job: LiveJob = {
-          runId,
-          ownerHash: hash(ownerToken),
-          status: "running",
-          step: "validate",
-          startedAt: timestamp,
-          updatedAt: timestamp,
-        }
-        jobs.set(runId, job)
+        if (liveBusy) throw new HttpError(429, "A live verification is already running")
         liveBusy = true
-        void (async () => {
+        try {
+          const runId = randomUUID()
+          const timestamp = new Date(now()).toISOString()
+          const job: LiveJob = {
+            runId,
+            userId: user.id,
+            status: "running",
+            step: "validate",
+            startedAt: timestamp,
+            updatedAt: timestamp,
+          }
+          jobs.set(runId, job)
+          void (async () => {
           try {
             const signal = AbortSignal.timeout(6 * 60_000)
             const evidence = await liveRunner({
@@ -380,7 +472,7 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
               runId,
               now: new Date(now()),
             })
-            await save(artifact, ownerToken)
+            await save(artifact, user.id)
             job.status = "complete"
           } catch {
             job.status = "failed"
@@ -390,14 +482,18 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
             job.updatedAt = new Date(now()).toISOString()
             liveBusy = false
           }
-        })()
-        return json(response, 202, { job: { runId, status: job.status, step: job.step, startedAt: job.startedAt } })
+          })()
+          return json(response, 202, { job: { runId, status: job.status, step: job.step, startedAt: job.startedAt } })
+        } catch (error) {
+          liveBusy = false
+          throw error
+        }
       }
 
       const jobMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)$/i)
       if (jobMatch && method === "GET") {
         const job = jobs.get(jobMatch[1])
-        if (!job || job.ownerHash !== hash(ownerToken)) throw new HttpError(404, "Job not found")
+        if (!job || job.userId !== user.id) throw new HttpError(404, "Job not found")
         return json(response, 200, { job: {
           runId: job.runId,
           status: job.status,
@@ -413,7 +509,7 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
         for (const name of await readdir(dataDir)) {
           if (!/^[0-9a-f-]+\.json$/i.test(name)) continue
           const stored = await readStored(name.slice(0, -5))
-          if (stored?.ownerHash === hash(ownerToken)) runs.push({ ...publicRun(stored), shared: Boolean(stored.shareHash) })
+          if (stored?.userId === user.id) runs.push({ ...publicRun(stored), shared: Boolean(stored.shareHash) })
         }
         runs.sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))
         return json(response, 200, { runs })
@@ -421,11 +517,11 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
 
       const runMatch = url.pathname.match(/^\/api\/runs\/([0-9a-f-]+)$/i)
       if (runMatch && method === "GET") {
-        const stored = await owned(runMatch[1], ownerToken)
+        const stored = await owned(runMatch[1], user.id)
         return json(response, 200, { run: { ...publicRun(stored), shared: Boolean(stored.shareHash) } })
       }
       if (runMatch && method === "DELETE") {
-        await owned(runMatch[1], ownerToken)
+        await owned(runMatch[1], user.id)
         await rm(pathFor(runMatch[1]), { force: true })
         response.writeHead(204).end()
         return
@@ -433,28 +529,18 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
 
       const shareMatch = url.pathname.match(/^\/api\/runs\/([0-9a-f-]+)\/share$/i)
       if (shareMatch && method === "POST") {
-        const stored = await owned(shareMatch[1], ownerToken)
+        const stored = await owned(shareMatch[1], user.id)
         const token = randomBytes(32).toString("base64url")
         stored.shareHash = hash(token)
         await writeStored(stored)
         return json(response, 201, { url: `/report/${stored.artifact.runId}#${token}` })
       }
       if (shareMatch && method === "DELETE") {
-        const stored = await owned(shareMatch[1], ownerToken)
+        const stored = await owned(shareMatch[1], user.id)
         delete stored.shareHash
         await writeStored(stored)
         response.writeHead(204).end()
         return
-      }
-
-      const reportMatch = url.pathname.match(/^\/api\/reports\/([0-9a-f-]+)\/access$/i)
-      if (reportMatch && method === "POST") {
-        const token = request.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{32,128})$/)?.[1]
-        const stored = await readStored(reportMatch[1])
-        if (!token || !stored?.shareHash || !matchesHash(token, stored.shareHash) || Date.parse(stored.expiresAt) <= now()) {
-          throw new HttpError(404, "Report not found")
-        }
-        return json(response, 200, { run: publicRun(stored) })
       }
 
       throw new HttpError(404, "Not found")
@@ -467,9 +553,11 @@ export function createDoneLedgerServer(options: ServerOptions = {}): Server {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT ?? 3000)
+  const dataDir = process.env.DONELEDGER_DATA_DIR?.trim() || undefined
   const apiKey = process.env.SOLARI_API_KEY?.trim()
   const liveAccessCode = process.env.DONELEDGER_LIVE_ACCESS_CODE?.trim()
-  const liveRunner: LiveRunner | undefined = apiKey && liveAccessCode
+  const allowedDolibarrOrigins = new Set((process.env.DONELEDGER_ALLOWED_DOLIBARR_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean))
+  const liveRunner: LiveRunner | undefined = apiKey && liveAccessCode && allowedDolibarrOrigins.size
     ? async ({ runId, manifest, dolibarr, signal, onProgress }) => {
         const live = await runReadOnlyLive(manifest, dolibarr, apiKey, { runId, signal, onProgress })
         return {
@@ -482,6 +570,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         }
       }
     : undefined
-  const server = createDoneLedgerServer({ liveAccessCode, liveRunner })
+  const server = createDoneLedgerServer({ dataDir, liveAccessCode, liveRunner, allowedDolibarrOrigins })
   server.listen(port, "0.0.0.0", () => console.log(`DoneLedger listening on http://0.0.0.0:${port}`))
 }

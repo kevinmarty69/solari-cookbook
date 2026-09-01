@@ -1,26 +1,25 @@
 # DoneLedger threat model
 
-Scope: a synthetic AP demonstration using two Solari browser sessions, an external Dolibarr instance, and a Solari comparison sandbox. It does not cover production financial data or payment execution.
+Scope: the public beta accepts an invoice-claim CSV and transient credentials for one dedicated, read-only Dolibarr account. One fresh Solari browser observes current ERP state and one Solari sandbox reproduces the deterministic comparison. The older seeded CLI is a separate synthetic demonstration.
 
 | Threat | Consequence | Minimum control |
 | --- | --- | --- |
-| Worker self-verifies | False work is admitted | Fresh verifier account and browser; no worker cookies, memory, export, or claimed result used as evidence |
-| Excess worker authority | Worker validates or pays | Enable `MAIN_USE_ADVANCED_PERMS`; grant only read/create-draft; execute negative validation and payment checks |
-| Verifier mutation | Evidence can be repaired after the fact | Read/export only; execute a negative create/update check |
-| Shared credentials or sessions | Separation is nominal | Distinct users and profiles; no credential inheritance; destroy sessions after the run |
-| Manifest tampering | Comparator validates against attacker-controlled truth | Version and hash the source fixture before worker execution; record the hash in the result |
-| Ambiguity becomes success | Missing or unparsable state is silently admitted | Default to `unknown`; only explicit deterministic rules can produce `verified` |
-| Duplicate or stale ERP state | Prior records satisfy a new claim | Dedicated synthetic instance; idempotent supplier-reference lookup; reject excess records; flag duplicate job IDs; record fresh observation metadata |
-| Artifact tampering | Public UI misstates the run | Publish raw `run.json` with source/export hashes; UI only renders the artifact and never upgrades a decision |
-| Prompt injection in ERP content | Untrusted supplier or invoice text redirects the browser worker | Treat page content as data; use fixed navigation and field mappings; reject any instruction discovered inside ERP records |
-| Secret or replay disclosure | ERP or Solari session compromise | Environment secrets; redact logs; never publish cookies, passwords, signed URLs, session IDs, or sensitive replays |
-| Resource leak | Cost and residual access continue | Close browser clients and kill sandboxes in `finally`; audit active resources after failures |
-| Demo interference or reset | Evidence is incomplete or belongs to another user | Dedicated authorized instance; synthetic data; fail closed if run identity cannot be established |
+| Agent self-verifies | False work is admitted | Treat CSV as a claim only; reload matching records through a fresh browser |
+| Excess verifier authority | Evidence can be changed or paid | Require invoice-create and payment-create routes to return access denied before reading |
+| Stale or duplicate ERP state | An old record satisfies a claim | Label the result as a point-in-time state check, compare exact invoice fields, surface missing and duplicate matches |
+| Missing state becomes success | Incomplete reads are silently admitted | Default to `unknown`; only explicit deterministic rules produce `verified` |
+| Arbitrary URL or redirect | Browser reaches internal or attacker-controlled services | HTTPS only; operator origin allowlist; initial DNS public-IP check; reject cross-origin targets and redirects |
+| Credential disclosure | ERP account compromise | Submit server-side only; never persist credentials; no recording, profile, replay or client log |
+| Cross-site form abuse or framing | A third party starts runs or tricks credential entry | Same-origin mutation checks, strict cookies, CSP `frame-ancestors 'none'`, `X-Frame-Options: DENY` |
+| Share-token theft | Private report becomes public | 256-bit token in URL fragment; persist only its hash; allow revoke/delete; expire after seven days |
+| Artifact overclaim | Fingerprints are mistaken for raw proof | Retain only condensed results; disclose that hashes cannot be recalculated without source rows |
+| Resource leak or credit abuse | Cost and residual access continue | One live run globally; invitation code; direct-IP rate limit; no retries; bounded SDK/page calls; cleanup in `finally` |
+| Multi-instance deployment | Rate limit, lock and history diverge | Deploy exactly one long-running Node process with a persistent `data/` disk |
 
 ## Trust boundary
 
-The source manifest states expected work. Dolibarr is the observed system of record. The worker may write drafts but cannot decide admission. The verifier may observe but cannot repair state. The deterministic comparator alone maps an expected/observed pair to `verified`, `exception`, or `unknown`. A human retains validation and payment authority.
+The uploaded manifest states expected records. Dolibarr is the observed system of record. DoneLedger proves only whether those claims match a fresh snapshot; it does not prove who created a record. The deterministic comparator maps each expected/observed pair to `verified`, `exception`, or `unknown`. A human retains validation and payment authority.
 
 ## Explicit non-goals
 
-No bank connection, invoice approval, payment, production PII, financial compliance claim, adversarial security audit of Dolibarr or Solari, cryptographic proof that every ERP record was created during the same run, or claim that browser-session separation is equivalent to separate organizations or hardware trust domains.
+No bank connection, invoice approval, payment, financial-compliance claim, complete ERP export retention, cryptographic attribution of records to an agent, or claim that browser isolation equals separate organizational or hardware trust domains.
