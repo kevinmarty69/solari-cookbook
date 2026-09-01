@@ -13,7 +13,7 @@ DoneLedger was built with AI assistance, as the public challenge explicitly enco
 - Codex drove local Chrome QA across desktop and mobile for the landing, public sample, signup, persisted login, sample report, sharing, revocation, deletion, settings, API-failure state, and mobile Escape/focus behavior.
 - Codex operated the authorized synthetic Dolibarr instance, prepared two least-privilege users and Solari profiles, ran a one-item canary, diagnosed fail-closed retries, and produced the committed 2026-09-01 live artifact: 17 verified, 3 exceptions, 0 unknown.
 
-The committed live artifact belongs to the earlier seeded proof path. The current read-only SaaS endpoint must pass its own single controlled Solari canary before the application is described as publicly live.
+The committed 17/20 live artifact belongs to the earlier seeded proof path. On 2026-09-01 the current read-only SaaS endpoint also completed one controlled Solari canary (`929d9367-904e-4315-b2a8-0c24a7e79b9f`). Its honest verdict was `RECORD_MISSING` (0/1 verified), while both negative permission probes and browser/sandbox cleanup passed. The persisted `0600` report contained none of the submitted Dolibarr credentials or access code. No automatic retry was made. This validates the live exception path and its boundaries, not a positive match or production reliability.
 
 ## Human responsibility
 

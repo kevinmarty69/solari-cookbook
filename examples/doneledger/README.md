@@ -82,6 +82,8 @@ Fixture mode is the safe default and requires no credentials: `DONELEDGER_MODE=f
 
 The committed live artifact was generated on 2026-09-01 against a dedicated DoliOnDemand trial containing only synthetic suppliers and invoices. It records all three negative permission probes and successful cleanup. It is evidence of this run only, not a reliability, accounting, compliance, or customer claim.
 
+The current SaaS endpoint received one separate controlled canary on 2026-09-01: run `929d9367-904e-4315-b2a8-0c24a7e79b9f`. The read-only account passed the negative create and payment probes, the browser and sandbox cleanup gates passed, and no submitted credential or access code appeared in the mode-`0600` report. Its verdict was `RECORD_MISSING` (0/1 verified), so it proves the live fail-closed exception path rather than a positive invoice match. It was not retried.
+
 ## Canonical evidence contract
 
 `results/run.json` uses this canonical schema. The renderer accepts a few legacy aliases, but producers should only emit these names:
