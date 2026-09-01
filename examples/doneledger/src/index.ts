@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto"
+import { createHash } from "node:crypto"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 
@@ -35,6 +35,7 @@ function mode(): Mode {
 
 async function writeResult(
   runMode: Mode,
+  runId: string,
   summary: VerificationSummary,
   groundTruth: readonly ExpectedInvoice[],
   manifestHash: string,
@@ -49,8 +50,9 @@ async function writeResult(
     observed?.records.map((invoice) => [invoice.jobId, invoice]) ?? [],
   )
   const artifact = {
-    runId: runMode === "fixture" ? "fixture-canonical" : randomUUID(),
+    runId,
     mode: runMode,
+    authorityModel: runMode === "fixture" ? "simulation" : "seeded_worker",
     synthetic: true,
     generatedAt: runMode === "fixture" ? "2026-09-01T00:00:00.000Z" : new Date().toISOString(),
     manifestHash,
@@ -91,7 +93,9 @@ async function main(): Promise<void> {
   const runMode = mode()
   const groundTruthSource = await fixtureSource("ground-truth.json")
   const groundTruth = JSON.parse(groundTruthSource) as ExpectedInvoice[]
-  const manifestHash = createHash("sha256").update(groundTruthSource).digest("hex")
+  let manifest = groundTruth
+  let runId = "fixture-canonical"
+  let manifestHash = createHash("sha256").update(groundTruthSource).digest("hex")
   let summary: VerificationSummary
   let observed: ObservedBatch | undefined
   let live: LiveRunResult | undefined
@@ -104,12 +108,15 @@ async function main(): Promise<void> {
     )
     summary = live.summary
     observed = live.observed
+    manifest = [...live.manifest]
+    runId = live.runId
+    manifestHash = createHash("sha256").update(JSON.stringify(manifest)).digest("hex")
   } else {
     observed = await fixture<ObservedBatch>("observed-canonical.json")
     summary = verifyBatch(groundTruth, observed)
   }
 
-  await writeResult(runMode, summary, groundTruth, manifestHash, observed, live?.permissions, live?.lifecycle)
+  await writeResult(runMode, runId, summary, manifest, manifestHash, observed, live?.permissions, live?.lifecycle)
   console.log(
     `DoneLedger: ${summary.verified}/${summary.total} verified, ${summary.exceptions} exceptions, ${summary.unknown} unknown`,
   )

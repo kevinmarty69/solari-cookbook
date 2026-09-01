@@ -4,7 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import type { ExpectedInvoice, ObservedBatch, ReasonCode } from "../src/types.ts";
-import { dateToIso, dolibarrAdapterFromEnv, liveConfigFromEnv, moneyToCents } from "../src/solari.ts";
+import { dateToIso, dolibarrAdapterFromEnv, liveConfigFromEnv, moneyToCents, safeDolibarrUrl, scopeManifestForRun } from "../src/solari.ts";
 import { hashObservedRecords, verifyBatch } from "../src/verify.ts";
 
 function fixture<T>(name: string): T {
@@ -118,4 +118,19 @@ test("Dolibarr money and date values normalize without locale drift", () => {
   assert.throws(() => moneyToCents(""), /Invalid money value/);
   assert.equal(dateToIso("Invoice date 08/18/2026"), "2026-08-18");
   assert.equal(dateToIso("Date de facture 18/08/2026"), "2026-08-18");
+});
+
+test("a live manifest gets a unique invoice namespace without mutating the claims", () => {
+  const before = structuredClone(groundTruth);
+  const scoped = scopeManifestForRun(groundTruth, "12345678-1234-4234-8234-123456789abc");
+  assert.equal(scoped[0].invoiceNumber, "INV-1001-12345678");
+  assert.deepEqual(groundTruth, before);
+  assert.throws(() => scopeManifestForRun(groundTruth, "not-a-run"), /UUID/);
+});
+
+test("live Dolibarr targets reject local and private networks", () => {
+  assert.equal(safeDolibarrUrl("https://erp.example/path").href, "https://erp.example/path");
+  for (const url of ["http://erp.example", "https://localhost", "https://127.0.0.1", "https://10.0.0.1", "https://[::1]"]) {
+    assert.throws(() => safeDolibarrUrl(url));
+  }
 });
