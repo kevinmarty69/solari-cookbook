@@ -1,0 +1,22 @@
+{
+  "name": "doneledger",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "tsx --test test/*.test.ts",
+    "demo": "tsx src/index.ts --fixture"
+  },
+  "dependencies": {
+    "@solarisdk/browser": "0.1.2",
+    "@solarisdk/sdk": "0.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "4.23.13",
+    "typescript": "^5.7.2"
+  }
+}

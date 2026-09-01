@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="DoneLedger independently checks work claimed complete by an AI worker against fresh system-of-record evidence.">
+    <title>DoneLedger — Independent evidence for agent work</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#evidence">Skip to evidence</a>
+
+    <header class="site-header">
+      <nav class="nav-shell" aria-label="Primary navigation">
+        <a class="wordmark" href="#top" aria-label="DoneLedger home">
+          <span class="mark" aria-hidden="true">D</span>
+          <span>DoneLedger</span>
+        </a>
+        <div class="nav-links">
+          <a href="#architecture">Architecture</a>
+          <a href="#limits">Limits</a>
+          <a href="../results/run.json">Raw JSON</a>
+          <a class="github-link" href="https://github.com/kevinmarty69/solari-cookbook/tree/codex/doneledger/examples/doneledger">GitHub</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero shell" aria-labelledby="page-title">
+        <div class="hero-copy">
+          <div class="eyebrow-row">
+            <p class="eyebrow">Public verification run</p>
+            <span class="source-badge" id="source-badge" data-mode="loading">Loading evidence</span>
+          </div>
+          <h1 id="page-title">The worker reported <span id="hero-claimed">20</span> drafts complete. An independent check found <span id="hero-exceptions">3</span> exceptions.</h1>
+          <p class="hero-summary">DoneLedger verifies fresh system-of-record state instead of trusting the worker’s own completion report.</p>
+          <div class="hero-actions">
+            <a class="button primary" id="inspect-cta" href="#evidence">Inspect 3 exceptions</a>
+            <a class="button secondary" href="#architecture">How verification works</a>
+          </div>
+          <p class="evidence-boundary" id="evidence-boundary" role="status">Loading the run boundary…</p>
+          <p class="validation-alert" id="validation-alert" role="alert" hidden></p>
+        </div>
+
+        <aside class="run-overview" aria-label="Run summary">
+          <div class="metric-grid">
+            <div><strong id="claimed-count">20</strong><span>Claimed</span></div>
+            <div><strong id="verified-count">17</strong><span>Verified</span></div>
+            <div class="metric-exception"><strong id="exception-count">3</strong><span>Exceptions</span></div>
+            <div><strong id="unknown-count">0</strong><span>Unknown</span></div>
+          </div>
+          <ol class="verification-rail" aria-label="Verification sequence">
+            <li><span>1</span><div><strong>Worker</strong><small>Creates drafts</small></div></li>
+            <li><span>2</span><div><strong>Fresh read</strong><small>New browser session</small></div></li>
+            <li><span>3</span><div><strong>Compare</strong><small>Sandbox verdict</small></div></li>
+          </ol>
+        </aside>
+      </section>
+
+      <section class="evidence-section shell" id="evidence" aria-labelledby="evidence-title">
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">Evidence workspace</p>
+            <h2 id="evidence-title">Inspect the verdict</h2>
+          </div>
+          <div class="run-identity">
+            <span>Run</span>
+            <code id="run-id">loading</code>
+          </div>
+        </div>
+
+        <div class="filter-bar" aria-label="Filter evidence by verdict">
+          <div class="filter-group" id="filter-group">
+            <button type="button" data-filter="exceptions" aria-pressed="true">Exceptions <span id="filter-exceptions-count">3</span></button>
+            <button type="button" data-filter="all" aria-pressed="false">All <span id="filter-all-count">20</span></button>
+            <button type="button" data-filter="verified" aria-pressed="false">Verified <span id="filter-verified-count">17</span></button>
+            <button type="button" data-filter="unknown" aria-pressed="false">Unknown <span id="filter-unknown-count">0</span></button>
+          </div>
+          <a class="raw-link" href="../results/run.json">Open raw artifact</a>
+        </div>
+
+        <div class="evidence-workspace">
+          <div class="evidence-list">
+            <div class="desktop-table-wrap">
+              <table>
+                <caption class="sr-only">Verification results for the selected run</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Job</th>
+                    <th scope="col">Reason</th>
+                    <th scope="col">Expected</th>
+                    <th scope="col">Observed</th>
+                    <th scope="col">ERP records</th>
+                    <th scope="col">Verdict</th>
+                  </tr>
+                </thead>
+                <tbody id="evidence-body"></tbody>
+              </table>
+            </div>
+            <div class="mobile-cards" id="mobile-cards"></div>
+            <p class="empty-state" id="empty-state" hidden>No evidence matches this filter.</p>
+          </div>
+
+          <aside class="inspector" id="inspector" aria-labelledby="inspector-title">
+            <div class="inspector-heading">
+              <div>
+                <p class="eyebrow">Selected evidence</p>
+                <h3 id="inspector-title">DL-018</h3>
+              </div>
+              <span class="status-badge exception" id="inspector-status">Exception</span>
+            </div>
+            <p class="reason-title" id="inspector-reason">TAX_MISMATCH</p>
+
+            <dl class="comparison-grid">
+              <div><dt>Expected total</dt><dd id="inspector-expected">—</dd></div>
+              <div><dt>Observed total</dt><dd id="inspector-observed">—</dd></div>
+            </dl>
+
+            <section class="inspector-block" aria-labelledby="differences-title">
+              <h4 id="differences-title">Exact differences</h4>
+              <div id="inspector-differences"></div>
+            </section>
+            <section class="inspector-block" aria-labelledby="provenance-title">
+              <h4 id="provenance-title">Provenance</h4>
+              <dl class="detail-list">
+                <div><dt>ERP records</dt><dd id="inspector-records">—</dd></div>
+                <div><dt>Manifest</dt><dd id="inspector-manifest">—</dd></div>
+                <div><dt>Export</dt><dd id="inspector-export">—</dd></div>
+              </dl>
+            </section>
+            <button class="button secondary copy-button" id="copy-evidence" type="button">Copy evidence JSON</button>
+            <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="architecture-section shell" id="architecture" aria-labelledby="architecture-title">
+        <div class="section-intro narrow">
+          <div>
+            <p class="eyebrow">Authority boundary</p>
+            <h2 id="architecture-title">The worker never approves itself.</h2>
+          </div>
+          <p>This is the intended architecture. Per-run permission probes below show what the loaded artifact actually proves.</p>
+        </div>
+
+        <ol class="architecture-flow">
+          <li>
+            <span class="flow-index">01</span>
+            <div><strong>Worker browser</strong><p>Creates supplier-invoice drafts with write-limited ERP credentials.</p></div>
+            <span class="permission-chip">No validate · No pay</span>
+          </li>
+          <li>
+            <span class="flow-index">02</span>
+            <div><strong>System of record</strong><p>Holds the actual draft records. Worker output is not verification input.</p></div>
+            <span class="permission-chip neutral">Fresh state</span>
+          </li>
+          <li>
+            <span class="flow-index">03</span>
+            <div><strong>Verifier browser</strong><p>Uses a separate profile and read-only ERP credentials to export state.</p></div>
+            <span class="permission-chip">No mutation</span>
+          </li>
+          <li>
+            <span class="flow-index">04</span>
+            <div><strong>Sandbox comparator</strong><p>Compares the source manifest with the independent export and emits this artifact.</p></div>
+            <span class="permission-chip neutral">Deterministic</span>
+          </li>
+        </ol>
+
+        <div class="proof-grid">
+          <article>
+            <h3>Permission evidence</h3>
+            <dl class="check-list">
+              <div><dt>Worker cannot validate</dt><dd id="permission-validate">Not recorded</dd></div>
+              <div><dt>Worker cannot pay</dt><dd id="permission-pay">Not recorded</dd></div>
+              <div><dt>Verifier cannot mutate</dt><dd id="permission-mutate">Not recorded</dd></div>
+            </dl>
+          </article>
+          <article>
+            <h3>Resource lifecycle</h3>
+            <dl class="check-list">
+              <div><dt>Browsers released</dt><dd id="lifecycle-browsers">Not recorded</dd></div>
+              <div><dt>Sandbox killed</dt><dd id="lifecycle-sandbox">Not recorded</dd></div>
+              <div><dt>Generated at</dt><dd id="generated-at">Not recorded</dd></div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section class="integrity-section shell" aria-labelledby="integrity-title">
+        <div class="section-intro narrow">
+          <div>
+            <p class="eyebrow">Evidence integrity</p>
+            <h2 id="integrity-title">Claims stay attached to artifacts.</h2>
+          </div>
+          <p>A live label is accepted only when hashes, cleanup and all three negative permission probes are present and true.</p>
+        </div>
+        <dl class="hash-list">
+          <div><dt>Manifest SHA-256</dt><dd><code id="manifest-hash">Not recorded</code></dd></div>
+          <div><dt>Export SHA-256</dt><dd><code id="export-hash">Not recorded</code></dd></div>
+          <div><dt>Artifact validation</dt><dd id="artifact-validation">Pending</dd></div>
+        </dl>
+      </section>
+
+      <aside class="limits-section shell" id="limits" aria-labelledby="limits-title">
+        <div>
+          <p class="eyebrow">Demonstration limits</p>
+          <h2 id="limits-title">What this does not prove</h2>
+        </div>
+        <ul>
+          <li>A verified draft is not approved, posted, payable or paid.</li>
+          <li>A synthetic run is not a customer result or compliance assessment.</li>
+          <li>One successful run does not prove future reliability or production readiness.</li>
+        </ul>
+        <p id="disclaimer-copy">Loading the artifact disclaimer…</p>
+      </aside>
+    </main>
+
+    <footer class="site-footer shell">
+      <span>DoneLedger · Evidence, not self-reporting</span>
+      <div><a href="../results/run.json">Raw JSON</a><a href="https://github.com/kevinmarty69/solari-cookbook/tree/codex/doneledger/examples/doneledger">Source on GitHub</a></div>
+    </footer>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

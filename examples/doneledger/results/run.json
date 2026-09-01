@@ -1,0 +1,261 @@
+{
+  "runId": "fixture-canonical",
+  "mode": "fixture",
+  "synthetic": true,
+  "generatedAt": "2026-09-01T00:00:00.000Z",
+  "manifestHash": "e3cf4c3dfeb04debc937f2357cd7a0102f4001fafc56f8e2cdfe46864f71c69c",
+  "exportHash": "418898004b69b3737323b1168f8dc167062ab0acff8029765e500bf53ca3cfab",
+  "summary": {
+    "claimed": 20,
+    "verified": 17,
+    "exceptions": 3,
+    "unknown": 0
+  },
+  "items": [
+    {
+      "jobId": "DL-001",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 120,
+      "observedTotal": 120,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-001"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-002",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 150,
+      "observedTotal": 150,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-002"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-003",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 96,
+      "observedTotal": 96,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-003"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-004",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 240,
+      "observedTotal": 240,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-004"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-005",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 90,
+      "observedTotal": 90,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-005"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-006",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 360,
+      "observedTotal": 360,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-006"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-007",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 112.8,
+      "observedTotal": 112.8,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-007"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-008",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 180,
+      "observedTotal": 180,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-008"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-009",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 51.6,
+      "observedTotal": 51.6,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-009"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-010",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 600,
+      "observedTotal": 600,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-010"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-011",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 132,
+      "observedTotal": 132,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-011"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-012",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 81,
+      "observedTotal": 81,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-012"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-013",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 300,
+      "observedTotal": 300,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-013"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-014",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 159.6,
+      "observedTotal": 159.6,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-014"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-015",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 444,
+      "observedTotal": 444,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-015"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-016",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 118.8,
+      "observedTotal": 118.8,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-016"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-017",
+      "status": "verified",
+      "reasonCode": "EXACT_MATCH",
+      "expectedTotal": 266.4,
+      "observedTotal": 266.4,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-017"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-018",
+      "status": "exception",
+      "reasonCode": "TAX_MISMATCH",
+      "expectedTotal": 1176,
+      "observedTotal": 1176,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-018"
+      ],
+      "differences": [
+        {
+          "field": "taxCents",
+          "expected": 19600,
+          "observed": 16900
+        }
+      ]
+    },
+    {
+      "jobId": "DL-019",
+      "status": "exception",
+      "reasonCode": "DUPLICATE_RECORD",
+      "expectedTotal": 192,
+      "observedTotal": 192,
+      "currency": "EUR",
+      "recordIds": [
+        "ERP-019-A",
+        "ERP-019-B"
+      ],
+      "differences": []
+    },
+    {
+      "jobId": "DL-020",
+      "status": "exception",
+      "reasonCode": "RECORD_MISSING",
+      "expectedTotal": 336,
+      "currency": "EUR",
+      "recordIds": [],
+      "differences": []
+    }
+  ],
+  "disclaimer": "Synthetic fixture; not production finance evidence."
+}
