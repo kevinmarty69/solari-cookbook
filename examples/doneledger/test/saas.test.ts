@@ -87,7 +87,7 @@ test("authenticated manifest validation reuses the server CSV contract without s
     assert.equal(invalid.status, 400)
     assert.match((await invalid.json() as { error: string }).error, /gross must equal/)
 
-    for (const [file, verified, claimed] of [["01-success-2-of-2.csv", 2, 2], ["02-exceptions-3-of-5.csv", 3, 5]] as const) {
+    for (const [file, verified, claimed] of [["01-success-2-of-2.csv", 2, 2], ["02-mixed-3-verified-of-5.csv", 3, 5]] as const) {
       const fixtureCsv = await readFile(new URL(`../public/test-kit/${file}`, import.meta.url), "utf8")
       const demo = await fetch(`${origin}/api/demo-runs`, {
         method: "POST",

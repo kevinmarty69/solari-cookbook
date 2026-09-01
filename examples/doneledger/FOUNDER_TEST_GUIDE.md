@@ -9,7 +9,7 @@ This guide validates the public product without spending Solari credits. Use the
 3. Log in with the reviewer account. Refresh once and confirm the session and display name persist.
 4. Open **New Verification** and download the founder test kit.
 5. Upload `01-success-2-of-2.csv`, then choose **Run Safe Fixture**. Expect `2/2` verified and no Solari or Dolibarr call.
-6. Upload `02-exceptions-3-of-5.csv`, then choose **Run Safe Fixture**. Expect `3/5` verified, one `FIELD_MISMATCH` and one `RECORD_MISSING`.
+6. Upload `02-mixed-3-verified-of-5.csv`, then choose **Run Safe Fixture**. Expect `3/5` verified, one `FIELD_MISMATCH` and one `RECORD_MISSING`.
 7. Upload `03-invalid-total.csv`. Expect an immediate validation error: gross must equal net plus tax.
 8. Upload `04-missing-column.csv`. Expect an immediate header validation error.
 9. From a retained report, test Share, open the link logged out, Revoke, then confirm the old link is unavailable. Create another fixture and test Delete.
