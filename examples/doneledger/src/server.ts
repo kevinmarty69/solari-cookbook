@@ -118,6 +118,7 @@ async function staticResponse(pathname: string, response: ServerResponse): Promi
     "/doneledger-live-proof.png": ["../public/doneledger-live-proof.png", "image/png"],
     "/test-kit/01-success-2-of-2.csv": ["../public/test-kit/01-success-2-of-2.csv", "text/csv; charset=utf-8"],
     "/test-kit/02-mixed-3-verified-of-5.csv": ["../public/test-kit/02-mixed-3-verified-of-5.csv", "text/csv; charset=utf-8"],
+    "/test-kit/02-exceptions-3-of-5.csv": ["../public/test-kit/02-mixed-3-verified-of-5.csv", "text/csv; charset=utf-8"],
     "/test-kit/03-invalid-total.csv": ["../public/test-kit/03-invalid-total.csv", "text/csv; charset=utf-8"],
     "/test-kit/04-missing-column.csv": ["../public/test-kit/04-missing-column.csv", "text/csv; charset=utf-8"],
     "/test-kit/founder-test-guide.md": ["../FOUNDER_TEST_GUIDE.md", "text/markdown; charset=utf-8"],
@@ -130,8 +131,10 @@ async function staticResponse(pathname: string, response: ServerResponse): Promi
   try {
     const [file, contentType] = route ?? ["../public/index.html", "text/html; charset=utf-8"]
     const body = await readFile(new URL(file, import.meta.url))
+    const downloadName = pathname.startsWith("/test-kit/") ? pathname.split("/").pop() : undefined
     response.writeHead(200, {
       "Content-Type": contentType,
+      ...(downloadName ? { "Content-Disposition": `attachment; filename="${downloadName}"` } : {}),
       "Cache-Control": contentType.startsWith("image/") ? "public, max-age=86400" : "no-store",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",

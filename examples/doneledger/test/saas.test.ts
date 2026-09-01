@@ -65,6 +65,10 @@ test("authenticated manifest validation reuses the server CSV contract without s
       body: JSON.stringify({ csv }),
     })
     assert.equal(anonymous.status, 401)
+    const legacyDownload = await fetch(`${origin}/test-kit/02-exceptions-3-of-5.csv`)
+    assert.equal(legacyDownload.status, 200)
+    assert.equal(legacyDownload.headers.get("content-disposition"), 'attachment; filename="02-exceptions-3-of-5.csv"')
+    assert.match(await legacyDownload.text(), /FOUNDER-EX-005/)
 
     const cookie = await signup(origin, "manifest@example.com")
     const valid = await fetch(`${origin}/api/manifests/validate`, {
