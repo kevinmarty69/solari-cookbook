@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util"
+import { randomUUID } from "node:crypto"
 
 import { Solari, type BrowserSession } from "@solarisdk/browser"
 import { SolariClient, type Sandbox } from "@solarisdk/sdk"
@@ -7,6 +8,7 @@ import type { ExpectedInvoice, ObservedBatch, VerificationSummary } from "./type
 import { hashObservedRecords, verifyBatch } from "./verify.ts"
 
 type BrowserPage = Awaited<ReturnType<BrowserSession["newPage"]>>
+type BrowserContextOptions = NonNullable<Parameters<BrowserSession["newContext"]>[0]>
 
 export interface ErpAdapter {
   readonly workerUrl: URL
@@ -71,27 +73,181 @@ export function dolibarrAdapterFromEnv(env = process.env): ErpAdapter {
   const workerUrl = httpUrl(env, "DONELEDGER_WORKER_URL")
   const verifierUrl = httpUrl(env, "DONELEDGER_VERIFIER_URL")
 
+  const base = workerUrl.origin
+  const denied = async (page: BrowserPage) => /access denied/i.test(await page.locator("body").innerText())
+  const go = (page: BrowserPage, path: string) => page.goto(new URL(path, base).href, { waitUntil: "domcontentloaded", timeout: 10_000 })
+  const submit = async (page: BrowserPage, selector: string) => {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
+      page.locator(selector).click(),
+    ])
+  }
+  const usDate = (iso: string) => {
+    const [year, month, day] = iso.split("-")
+    return `${month}/${day}/${year}`
+  }
+  const setDate = async (page: BrowserPage, prefix: "re" | "ech", iso: string) => {
+    const [year, month, day] = iso.split("-")
+    await page.locator(`#${prefix}`).fill(usDate(iso))
+    for (const [suffix, value] of [["day", day], ["month", month], ["year", year]] as const) {
+      await page.locator(`#${prefix}${suffix}`).evaluate((element, next) => {
+        (element as HTMLInputElement).value = next
+      }, value)
+    }
+  }
+  const existing = async (page: BrowserPage, invoiceNumber: string) => {
+    await go(page, `/fourn/facture/list.php?search_refsupplier=${encodeURIComponent(invoiceNumber)}`)
+    if (await denied(page)) throw new Error("Worker cannot read supplier invoices")
+    const hrefs = await page.locator('a[href*="/fourn/facture/card.php?"]').evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href")).filter((href): href is string => typeof href === "string" && /[?&](?:id|facid)=\d+/.test(href)),
+    )
+    return [...new Set(hrefs)]
+  }
+  const vatOption = async (page: BrowserPage, rate: number) => {
+    const options = await page.locator("select#tva_tx option").evaluateAll((items) =>
+      items.map((item) => ({ value: (item as HTMLOptionElement).value, text: item.textContent ?? "" })),
+    )
+    const option = options.find(({ value, text }) => Number.parseFloat(value || text) === rate)
+    if (!option) throw new Error(`VAT rate ${rate} is unavailable`)
+    return option.value
+  }
+  const addDraftLine = async (page: BrowserPage, invoice: ExpectedInvoice) => {
+    const lineCount = await page.locator('#tablelines tr[id^="row-"]').count()
+    if (lineCount > 1) throw new Error(`Draft ${invoice.jobId} has unexpected extra lines`)
+    if (lineCount === 1) return
+    await page.locator("#dp_desc").fill(`DoneLedger synthetic job ${invoice.jobId}`)
+    if (await page.locator("#select_type").count()) await page.locator("#select_type").selectOption("0")
+    await page.locator("#price_ht").fill(((invoice.jobId === "DL-018" ? 84_500 : invoice.netCents) / 100).toFixed(2))
+    await page.locator("#qty").fill("1")
+    if (await page.locator("select#tva_tx").count()) {
+      await page.locator("select#tva_tx").selectOption(await vatOption(page, 20))
+    }
+    await submit(page, "#addline")
+    if (await denied(page) || await page.locator('#tablelines tr[id^="row-"]').count() !== 1) {
+      throw new Error(`Draft line ${invoice.jobId} was not created`)
+    }
+  }
+  const createDraft = async (page: BrowserPage, invoice: ExpectedInvoice, copy: number) => {
+    await go(page, "/fourn/facture/card.php?action=create")
+    if (await denied(page)) throw new Error("Worker cannot create supplier invoices")
+
+    const suppliers = await page.locator("#socid option").evaluateAll((options) =>
+      options.map((option) => ({ value: (option as HTMLOptionElement).value, text: option.textContent ?? "" })),
+    )
+    const supplier = suppliers.find(({ text }) => text.includes(`[${invoice.supplierId}]`))
+    if (!supplier) throw new Error(`Supplier ${invoice.supplierId} is unavailable`)
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
+      page.locator("#socid").selectOption(supplier.value),
+    ])
+    const invoiceNumber = invoice.jobId === "DL-019" && copy > 0 ? `${invoice.invoiceNumber}-DUP` : invoice.invoiceNumber
+    await page.locator('input[name="ref_supplier"]').fill(invoiceNumber)
+    await page.locator('input[name="label"]').fill(invoice.jobId)
+    await setDate(page, "re", invoice.issueDate)
+    await setDate(page, "ech", invoice.dueDate)
+    await page.locator("#note_private").fill(`DoneLedger synthetic job ${invoice.jobId}`)
+    await submit(page, 'input[name="save"]')
+    if (await denied(page) || !/[?&](?:id|facid)=\d+/.test(page.url())) throw new Error(`Draft header ${invoice.jobId} was not created`)
+    await addDraftLine(page, invoice)
+  }
+
   return {
     workerUrl,
     verifierUrl,
     assertReady() {
-      throw new Error(
-        "Live Dolibarr adapter is disabled: selectors and role permissions have not been validated. Fixture mode remains available.",
+      if (workerUrl.origin !== verifierUrl.origin) throw new Error("Worker and verifier must use the same Dolibarr origin")
+    },
+    async writeDrafts(page, invoices) {
+      for (const invoice of invoices) {
+        const wanted = invoice.jobId === "DL-020" ? 0 : invoice.jobId === "DL-019" ? 2 : 1
+        const found = await existing(page, invoice.invoiceNumber)
+        if (found.length > wanted) throw new Error(`Too many existing records for ${invoice.jobId}`)
+        for (const href of found) {
+          await go(page, href)
+          await addDraftLine(page, invoice)
+        }
+        for (let copy = found.length; copy < wanted; copy += 1) await createDraft(page, invoice, copy)
+      }
+    },
+    async probeWorkerRestrictions(page) {
+      await go(page, "/fourn/facture/card.php?action=create")
+      const workerCannotValidate = (await page.locator('[href*="action=validate"], input[value="Validate"], button[value="Validate"]').count()) === 0
+      await go(page, "/fourn/paiement/card.php?action=create")
+      return { workerCannotValidate, workerCannotPay: await denied(page) }
+    },
+    async probeVerifierRestrictions(page) {
+      await go(page, "/fourn/facture/card.php?action=create")
+      return { verifierCannotMutate: await denied(page) }
+    },
+    async readDrafts(page) {
+      await go(page, "/fourn/facture/list.php?button_removefilter_x=x")
+      if (await denied(page)) return unavailableBatch()
+      const hrefs = await page.locator('a[href*="/fourn/facture/card.php?"]').evaluateAll((links) =>
+        [...new Set(links.map((link) => link.getAttribute("href")).filter((href): href is string => typeof href === "string" && /[?&](?:id|facid)=\d+/.test(href)))],
       )
-    },
-    async writeDrafts() {
-      throw new Error("Unvalidated Dolibarr worker adapter")
-    },
-    async probeWorkerRestrictions() {
-      throw new Error("Unvalidated Dolibarr worker permission probes")
-    },
-    async probeVerifierRestrictions() {
-      throw new Error("Unvalidated Dolibarr verifier permission probes")
-    },
-    async readDrafts() {
-      throw new Error("Unvalidated Dolibarr verifier adapter")
+      const records = []
+      for (const href of hrefs) {
+        await go(page, href)
+        if (await denied(page)) return unavailableBatch()
+        const body = await page.locator("body").innerText()
+        const jobId = body.match(/\bDL-\d{3}\b/)?.[0]
+        if (!jobId) continue
+        const supplierId = body.match(/\bSUP-\d{3}\b/)?.[0]
+        const invoiceNumber = body.match(/\bINV-\d+\b/)?.[0]
+        const rows = await page.locator("tr").evaluateAll((items) => items.map((row) =>
+          [...row.querySelectorAll(":scope > td")].map((cell) => (cell.textContent ?? "").replace(/\s+/g, " ").trim()),
+        ))
+        const rowValue = (label: RegExp) => rows.find(([name]) => label.test(name ?? ""))?.slice(1).join(" ") ?? ""
+        const issueDate = dateToIso(rowValue(/Invoice date|Date de facture/i))
+        const dueDate = dateToIso(rowValue(/Due date|Payment due on|Date limite de paiement/i))
+        const lines = await page.locator('#tablelines tr[id^="row-"]').evaluateAll((items) => items.map((row) => ({
+          net: row.querySelector(".linecolht")?.textContent ?? "",
+          gross: row.querySelector(".linecoluttc")?.textContent ?? "",
+        })))
+        const netCents = lines.reduce((sum, line) => sum + moneyToCents(line.net), 0)
+        const grossCents = lines.reduce((sum, line) => sum + moneyToCents(line.gross), 0)
+        if (!supplierId || !invoiceNumber || !issueDate || !dueDate || lines.length === 0) return unavailableBatch()
+        records.push({
+          jobId,
+          recordId: `DOL-${new URL(page.url()).searchParams.get("id") ?? new URL(page.url()).searchParams.get("facid")}`,
+          supplierId,
+          invoiceNumber,
+          issueDate,
+          dueDate,
+          currency: "EUR",
+          netCents,
+          taxCents: grossCents - netCents,
+          grossCents,
+          state: /\bDraft\b|\bBrouillon\b/i.test(body) ? "draft" as const : "posted" as const,
+        })
+      }
+      const observedAt = new Date().toISOString()
+      return { state: "fresh", runId: randomUUID(), observedAt, exportHash: hashObservedRecords(records), records }
     },
   }
+}
+
+export function moneyToCents(value: string): number {
+  let number = value.replace(/[^\d,.-]/g, "")
+  if (!number) throw new Error("Invalid money value")
+  if (number.includes(",") && number.includes(".")) {
+    number = number.lastIndexOf(".") > number.lastIndexOf(",") ? number.replaceAll(",", "") : number.replaceAll(".", "").replace(",", ".")
+  } else if (number.includes(",")) {
+    number = /,\d{2}$/.test(number) ? number.replace(",", ".") : number.replaceAll(",", "")
+  }
+  const parsed = Number(number)
+  if (!Number.isFinite(parsed)) throw new Error("Invalid money value")
+  return Math.round(parsed * 100)
+}
+
+export function dateToIso(value: string): string | undefined {
+  const match = value.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/)
+  if (!match) return undefined
+  const [, first, second, year] = match
+  const french = value.includes("Date de")
+  const month = french ? second : first
+  const day = french ? first : second
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
 }
 
 const COMPARATOR = String.raw`
@@ -239,7 +395,9 @@ export async function runLive(
   try {
     const worker = await browsers.launch({ profileId: config.workerProfileId })
     opened.add(worker)
-    const workerPage = await worker.newPage()
+    const workerContext = await worker.newContext({ storageState: worker.session.storageState as BrowserContextOptions["storageState"] })
+    const workerPage = await workerContext.newPage()
+    workerPage.setDefaultTimeout(8_000)
     await workerPage.goto(adapter.workerUrl.href)
     const workerPermissions = await adapter.probeWorkerRestrictions(workerPage)
     await adapter.writeDrafts(workerPage, groundTruth)
@@ -249,7 +407,9 @@ export async function runLive(
     const verifier = await browsers.launch({ profileId: config.verifierProfileId })
     opened.add(verifier)
     if (verifier.id === worker.id) throw new Error("Solari returned the same browser session twice")
-    const verifierPage = await verifier.newPage()
+    const verifierContext = await verifier.newContext({ storageState: verifier.session.storageState as BrowserContextOptions["storageState"] })
+    const verifierPage = await verifierContext.newPage()
+    verifierPage.setDefaultTimeout(8_000)
     await verifierPage.goto(adapter.verifierUrl.href)
     const verifierPermissions = await adapter.probeVerifierRestrictions(verifierPage)
     const observed = validateObservedBatch(await adapter.readDrafts(verifierPage))

@@ -1,10 +1,10 @@
 {
-  "runId": "fixture-canonical",
-  "mode": "fixture",
+  "runId": "86775a9b-2935-40b3-a531-25cf1dbb8e4b",
+  "mode": "live",
   "synthetic": true,
-  "generatedAt": "2026-09-01T00:00:00.000Z",
+  "generatedAt": "2026-09-01T16:06:14.070Z",
   "manifestHash": "e3cf4c3dfeb04debc937f2357cd7a0102f4001fafc56f8e2cdfe46864f71c69c",
-  "exportHash": "418898004b69b3737323b1168f8dc167062ab0acff8029765e500bf53ca3cfab",
+  "exportHash": "4e83b424b0d32a708e92571cc4e298d970e6708eac6fde003bb574e25cdbc2c7",
   "summary": {
     "claimed": 20,
     "verified": 17,
@@ -20,7 +20,7 @@
       "observedTotal": 120,
       "currency": "EUR",
       "recordIds": [
-        "ERP-001"
+        "DOL-1"
       ],
       "differences": []
     },
@@ -32,7 +32,7 @@
       "observedTotal": 150,
       "currency": "EUR",
       "recordIds": [
-        "ERP-002"
+        "DOL-5"
       ],
       "differences": []
     },
@@ -44,7 +44,7 @@
       "observedTotal": 96,
       "currency": "EUR",
       "recordIds": [
-        "ERP-003"
+        "DOL-6"
       ],
       "differences": []
     },
@@ -56,7 +56,7 @@
       "observedTotal": 240,
       "currency": "EUR",
       "recordIds": [
-        "ERP-004"
+        "DOL-7"
       ],
       "differences": []
     },
@@ -68,7 +68,7 @@
       "observedTotal": 90,
       "currency": "EUR",
       "recordIds": [
-        "ERP-005"
+        "DOL-8"
       ],
       "differences": []
     },
@@ -80,7 +80,7 @@
       "observedTotal": 360,
       "currency": "EUR",
       "recordIds": [
-        "ERP-006"
+        "DOL-9"
       ],
       "differences": []
     },
@@ -92,7 +92,7 @@
       "observedTotal": 112.8,
       "currency": "EUR",
       "recordIds": [
-        "ERP-007"
+        "DOL-10"
       ],
       "differences": []
     },
@@ -104,7 +104,7 @@
       "observedTotal": 180,
       "currency": "EUR",
       "recordIds": [
-        "ERP-008"
+        "DOL-11"
       ],
       "differences": []
     },
@@ -116,7 +116,7 @@
       "observedTotal": 51.6,
       "currency": "EUR",
       "recordIds": [
-        "ERP-009"
+        "DOL-12"
       ],
       "differences": []
     },
@@ -128,7 +128,7 @@
       "observedTotal": 600,
       "currency": "EUR",
       "recordIds": [
-        "ERP-010"
+        "DOL-13"
       ],
       "differences": []
     },
@@ -140,7 +140,7 @@
       "observedTotal": 132,
       "currency": "EUR",
       "recordIds": [
-        "ERP-011"
+        "DOL-14"
       ],
       "differences": []
     },
@@ -152,7 +152,7 @@
       "observedTotal": 81,
       "currency": "EUR",
       "recordIds": [
-        "ERP-012"
+        "DOL-15"
       ],
       "differences": []
     },
@@ -164,7 +164,7 @@
       "observedTotal": 300,
       "currency": "EUR",
       "recordIds": [
-        "ERP-013"
+        "DOL-16"
       ],
       "differences": []
     },
@@ -176,7 +176,7 @@
       "observedTotal": 159.6,
       "currency": "EUR",
       "recordIds": [
-        "ERP-014"
+        "DOL-17"
       ],
       "differences": []
     },
@@ -188,7 +188,7 @@
       "observedTotal": 444,
       "currency": "EUR",
       "recordIds": [
-        "ERP-015"
+        "DOL-18"
       ],
       "differences": []
     },
@@ -200,7 +200,7 @@
       "observedTotal": 118.8,
       "currency": "EUR",
       "recordIds": [
-        "ERP-016"
+        "DOL-19"
       ],
       "differences": []
     },
@@ -212,7 +212,7 @@
       "observedTotal": 266.4,
       "currency": "EUR",
       "recordIds": [
-        "ERP-017"
+        "DOL-20"
       ],
       "differences": []
     },
@@ -221,16 +221,26 @@
       "status": "exception",
       "reasonCode": "TAX_MISMATCH",
       "expectedTotal": 1176,
-      "observedTotal": 1176,
+      "observedTotal": 1014,
       "currency": "EUR",
       "recordIds": [
-        "ERP-018"
+        "DOL-21"
       ],
       "differences": [
+        {
+          "field": "netCents",
+          "expected": 98000,
+          "observed": 84500
+        },
         {
           "field": "taxCents",
           "expected": 19600,
           "observed": 16900
+        },
+        {
+          "field": "grossCents",
+          "expected": 117600,
+          "observed": 101400
         }
       ]
     },
@@ -242,8 +252,8 @@
       "observedTotal": 192,
       "currency": "EUR",
       "recordIds": [
-        "ERP-019-A",
-        "ERP-019-B"
+        "DOL-23",
+        "DOL-4"
       ],
       "differences": []
     },
@@ -257,5 +267,14 @@
       "differences": []
     }
   ],
-  "disclaimer": "Synthetic fixture; not production finance evidence."
+  "permissionEvidence": {
+    "workerCannotValidate": true,
+    "workerCannotPay": true,
+    "verifierCannotMutate": true
+  },
+  "lifecycle": {
+    "browsersReleased": true,
+    "sandboxKilled": true
+  },
+  "disclaimer": "Synthetic live run; not production finance evidence."
 }

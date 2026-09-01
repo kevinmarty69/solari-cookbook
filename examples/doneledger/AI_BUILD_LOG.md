@@ -9,6 +9,7 @@ DoneLedger was built with AI assistance, as the public challenge explicitly enco
 - Codex researched official Odoo and Dolibarr documentation, including demo lifetime, hosting constraints, and permission behavior.
 - A Codex design agent used Mobbin references from Adaline, LangChain, Vanta, Cloudflare, Sentry, n8n, Autosend, and Ada to replace the initial proof interface with an evidence-first console.
 - Codex assisted with implementation and review of the public proof interface, fixture fallback, documentation, threat model, and live validation gates.
+- Codex operated the authorized synthetic Dolibarr instance, prepared two least-privilege users and Solari profiles, ran a one-item canary, diagnosed fail-closed retries, and produced the committed 2026-09-01 live artifact: 17 verified, 3 exceptions, 0 unknown.
 
 ## Human responsibility
 
@@ -16,4 +17,4 @@ The human owner chose the application goal, corrected the project from customer 
 
 ## What this log does not claim
 
-This log does not claim that AI independently shipped the project, that the research proves market demand, that a fixture is a real customer workload, or that a live Solari/Dolibarr run occurred before its artifacts are present and independently checked.
+This log does not claim that AI independently shipped the project, that the research proves market demand, that synthetic data is a customer workload, or that one successful Solari/Dolibarr run proves production reliability.

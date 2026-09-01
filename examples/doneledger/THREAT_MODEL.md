@@ -10,7 +10,7 @@ Scope: a synthetic AP demonstration using two Solari browser sessions, an extern
 | Shared credentials or sessions | Separation is nominal | Distinct users and profiles; no credential inheritance; destroy sessions after the run |
 | Manifest tampering | Comparator validates against attacker-controlled truth | Version and hash the source fixture before worker execution; record the hash in the result |
 | Ambiguity becomes success | Missing or unparsable state is silently admitted | Default to `unknown`; only explicit deterministic rules can produce `verified` |
-| Duplicate or stale ERP state | Prior records satisfy a new claim | Unique run/reference namespace; compare run-scoped references and timestamps; flag duplicates |
+| Duplicate or stale ERP state | Prior records satisfy a new claim | Dedicated synthetic instance; idempotent supplier-reference lookup; reject excess records; flag duplicate job IDs; record fresh observation metadata |
 | Artifact tampering | Public UI misstates the run | Publish raw `run.json` with source/export hashes; UI only renders the artifact and never upgrades a decision |
 | Prompt injection in ERP content | Untrusted supplier or invoice text redirects the browser worker | Treat page content as data; use fixed navigation and field mappings; reject any instruction discovered inside ERP records |
 | Secret or replay disclosure | ERP or Solari session compromise | Environment secrets; redact logs; never publish cookies, passwords, signed URLs, session IDs, or sensitive replays |
@@ -23,4 +23,4 @@ The source manifest states expected work. Dolibarr is the observed system of rec
 
 ## Explicit non-goals
 
-No bank connection, invoice approval, payment, production PII, financial compliance claim, adversarial security audit of Dolibarr or Solari, or claim that browser-session separation is equivalent to separate organizations or hardware trust domains.
+No bank connection, invoice approval, payment, production PII, financial compliance claim, adversarial security audit of Dolibarr or Solari, cryptographic proof that every ERP record was created during the same run, or claim that browser-session separation is equivalent to separate organizations or hardware trust domains.

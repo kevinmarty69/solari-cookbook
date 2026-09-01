@@ -1,8 +1,8 @@
 # DoneLedger
 
-> The worker claimed 20 invoices complete. A fresh verifier admits only 17.
+> The worker claimed 20 invoices complete. A fresh verifier admitted only 17.
 
-DoneLedger is a small public proof of one idea: automated work should be billed or approved from independently observed state, not from the worker's self-report. The committed fixture demonstrates the deterministic verifier. The live target is a write-limited Solari browser entering draft supplier invoices in Dolibarr, followed by a fresh read-only browser and a Solari sandbox comparison.
+DoneLedger is a small public proof of one idea: automated work should be billed or approved from independently observed state, not from the worker's self-report. The committed artifact is a synthetic live run: a write-limited Solari browser entered draft supplier invoices in Dolibarr, a fresh read-only Solari browser observed them, and a Solari sandbox reproduced the deterministic comparison.
 
 The included data is synthetic. This is a technical demonstration, not a production finance system or a customer result.
 
@@ -19,7 +19,7 @@ python3 -m http.server 8000
 open http://localhost:8000/public/
 ```
 
-The page attempts to load `results/run.json`. Until a real run artifact exists, it clearly displays its bundled 20-item fixture: 17 verified, 3 exceptions, 0 unknown.
+The page loads the committed `results/run.json`: 17 verified, 3 exceptions, 0 unknown. If the artifact is missing or fails its schema, hash, counter, permission, or cleanup gates, the interface rejects the live claim and visibly falls back to its bundled fixture.
 
 ## Live-run gates
 
@@ -47,9 +47,15 @@ export DONELEDGER_WORKER_URL=https://your-authorized-erp.example/worker-path
 export DONELEDGER_VERIFIER_URL=https://your-authorized-erp.example/verifier-path
 export DONELEDGER_WORKER_PROFILE_ID=...
 export DONELEDGER_VERIFIER_PROFILE_ID=...
+export DONELEDGER_WORKER_USERNAME=...
+export DONELEDGER_WORKER_PASSWORD=...
+export DONELEDGER_VERIFIER_USERNAME=...
+export DONELEDGER_VERIFIER_PASSWORD=...
 ```
 
-Fixture mode is the safe default and requires no credentials: `DONELEDGER_MODE=fixture`. The two Solari profiles must be prepared separately with their respective ERP users; profile IDs are not permission boundaries unless the underlying Dolibarr accounts have the required rights. Administrator credentials are deliberately absent. The automated path must not possess validation or payment authority. Do not expose API keys, passwords, Solari session IDs, control URLs, preview URLs, cookies, or unredacted replays in logs, artifacts, screenshots, commits, issues, or posts.
+Fixture mode is the safe default and requires no credentials: `DONELEDGER_MODE=fixture`. For a live run, copy `.env.example` to the ignored `.env`, prepare the two profiles once with `npm run profiles:save`, remove the username/password entries, run `npm run canary`, then run `npm run live`. Profile IDs are not permission boundaries unless the underlying Dolibarr accounts have the required rights. Administrator credentials are deliberately absent. The automated path must not possess validation or payment authority. Do not expose API keys, passwords, Solari session IDs, control URLs, preview URLs, cookies, or unredacted replays in logs, artifacts, screenshots, commits, issues, or posts.
+
+The committed live artifact was generated on 2026-09-01 against a dedicated DoliOnDemand trial containing only synthetic suppliers and invoices. It records all three negative permission probes and successful cleanup. It is evidence of this run only, not a reliability, accounting, compliance, or customer claim.
 
 ## Canonical evidence contract
 

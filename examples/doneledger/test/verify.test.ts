@@ -4,7 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import type { ExpectedInvoice, ObservedBatch, ReasonCode } from "../src/types.ts";
-import { dolibarrAdapterFromEnv, liveConfigFromEnv } from "../src/solari.ts";
+import { dateToIso, dolibarrAdapterFromEnv, liveConfigFromEnv, moneyToCents } from "../src/solari.ts";
 import { hashObservedRecords, verifyBatch } from "../src/verify.ts";
 
 function fixture<T>(name: string): T {
@@ -110,4 +110,12 @@ test("live configuration rejects embedded secrets and shared profiles before all
     DONELEDGER_WORKER_PROFILE_ID: "same",
     DONELEDGER_VERIFIER_PROFILE_ID: "same",
   }), /different Solari profiles/);
+});
+
+test("Dolibarr money and date values normalize without locale drift", () => {
+  assert.equal(moneyToCents("€1,176.00"), 117600);
+  assert.equal(moneyToCents("1 176,00 €"), 117600);
+  assert.throws(() => moneyToCents(""), /Invalid money value/);
+  assert.equal(dateToIso("Invoice date 08/18/2026"), "2026-08-18");
+  assert.equal(dateToIso("Date de facture 18/08/2026"), "2026-08-18");
 });

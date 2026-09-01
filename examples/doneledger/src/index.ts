@@ -77,7 +77,9 @@ async function writeResult(
     }),
     permissionEvidence: permissions,
     lifecycle,
-    disclaimer: "Synthetic fixture; not production finance evidence.",
+    disclaimer: runMode === "fixture"
+      ? "Synthetic fixture; not production finance evidence."
+      : "Synthetic live run; not production finance evidence.",
   }
   await writeFile(
     new URL("../results/run.json", import.meta.url),
